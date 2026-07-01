@@ -428,6 +428,37 @@
     margin: 0.3rem 0;
   }
   .join-request-card .message { color: var(--parchment); margin: 0.3rem 0 0.6rem; }
+
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .auth-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  .auth-buttons { display: flex; gap: 0.5rem; }
+  .auth-buttons button { font-size: 0.75rem; padding: 0.4rem 0.8rem; }
+  .auth-status.pending { color: var(--gold-bright); }
+  .auth-status.declined { color: var(--red); }
+  .auth-status.approved { color: var(--green); }
+  .auth-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.1rem;
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+  }
+  .auth-form input { flex: 1 1 140px; }
+  .cancel-btn { color: var(--muted); border-color: var(--panel-border); }
 </style>
 </head>
 <body>
@@ -437,6 +468,30 @@
     <h1>Guild Tracker</h1>
     <p class="subtitle">Auto-updated every 2 hours via GitHub Actions</p>
   </header>
+
+  <div class="auth-bar">
+    <span class="auth-status" id="auth-status">Checking session&hellip;</span>
+    <div class="auth-buttons" id="auth-buttons">
+      <button type="button" id="show-login-btn">Log in</button>
+      <button type="button" id="show-signup-btn">Create account</button>
+    </div>
+  </div>
+
+  <form class="auth-form" id="login-form" style="display:none">
+    <input type="email" id="login-email" placeholder="Email" required>
+    <input type="password" id="login-password" placeholder="Password" required>
+    <button type="submit">Log in</button>
+    <button type="button" class="cancel-btn" id="cancel-login-btn">Cancel</button>
+  </form>
+
+  <form class="auth-form" id="signup-form" style="display:none">
+    <input type="text" id="signup-rsn" placeholder="Your RSN" required>
+    <input type="email" id="signup-email" placeholder="Email" required>
+    <input type="password" id="signup-password" placeholder="Password (6+ characters)" required minlength="6">
+    <input type="text" id="signup-message" placeholder="Anything else? (optional)">
+    <button type="submit">Create account</button>
+    <button type="button" class="cancel-btn" id="cancel-signup-btn">Cancel</button>
+  </form>
 
   <nav class="tabs">
     <button class="tab-btn active" data-tab="home">Home</button>
@@ -473,20 +528,13 @@
     </div>
 
     <div class="join-panel">
-      <h2>Want to join?</h2>
-      <p class="lead">Send us your RS3 username and a way to reach you &mdash; someone will follow up.</p>
-      <form class="join-form" id="join-form">
-        <input type="text" class="rsn" id="join-rsn" placeholder="Your RSN" required>
-        <input type="text" class="contact" id="join-contact" placeholder="Discord or email (optional)">
-        <input type="text" class="message" id="join-message" placeholder="Anything else? (optional)">
-        <button type="submit">Send request</button>
-      </form>
-      <div class="join-requests">
+      <h2>Membership</h2>
+      <p class="lead" id="membership-note">New to the guild? Use "Create account" at the top of the page &mdash; your request shows up here for an officer to review.</p>
+      <div class="join-requests" id="admin-pending-wrap" style="display:none">
         <div class="join-requests-header">
-          <h3>Pending requests</h3>
-          <button type="button" id="admin-auth-btn" class="admin-auth-btn">Sign in as admin</button>
+          <h3>Pending member requests</h3>
         </div>
-        <div id="join-requests-list"><p class="empty-note">Sign in as an admin to view and manage requests.</p></div>
+        <div id="join-requests-list"></div>
       </div>
     </div>
 
@@ -523,9 +571,7 @@
     <div class="events">
       <h2>Upcoming events</h2>
       <div class="name-row">
-        <span>RSVPing as:</span>
-        <input type="text" id="rsvp-name" placeholder="Your RSN">
-        <span id="events-status" class="empty-note"></span>
+        <span id="rsvp-identity" class="empty-note">Sign in to RSVP.</span>
       </div>
       <form class="event-form" id="event-form">
         <input type="text" class="title" id="event-title" placeholder="Event name, e.g. Barrows run" required>
@@ -533,6 +579,7 @@
         <input type="text" class="notes" id="event-notes" placeholder="Notes (optional)">
         <button type="submit">Add event</button>
       </form>
+      <p class="empty-note" id="events-status"></p>
       <div id="upcoming-events"></div>
       <details class="past-events" id="past-events-wrap" style="display:none">
         <summary>Past events &#9656;</summary>
@@ -706,154 +753,227 @@ const firebaseConfig = {
   appId: "1:23971271243:web:5ba59b4ca23a80b219b3ce"
 };
 
-
-const statusEl = document.getElementById('events-status');
-const nameInput = document.getElementById('rsvp-name');
-const upcomingEl = document.getElementById('upcoming-events');
-const pastEl = document.getElementById('past-events');
-const pastWrap = document.getElementById('past-events-wrap');
-const form = document.getElementById('event-form');
-
-nameInput.value = localStorage.getItem('guildTrackerRsvpName') || '';
-nameInput.addEventListener('change', () => {
-  localStorage.setItem('guildTrackerRsvpName', nameInput.value.trim());
-});
-
-function keyFor(name) {
-  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'anon';
-}
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-function currentName() {
-  const n = nameInput.value.trim();
-  if (!n) { alert('Enter your RSN in the "RSVPing as" field first.'); }
-  return n;
+function keyFor(name) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'anon';
 }
 
+const authStatusEl = document.getElementById('auth-status');
+const showLoginBtn = document.getElementById('show-login-btn');
+const showSignupBtn = document.getElementById('show-signup-btn');
+const loginForm = document.getElementById('login-form');
+const signupForm = document.getElementById('signup-form');
+const cancelLoginBtn = document.getElementById('cancel-login-btn');
+const cancelSignupBtn = document.getElementById('cancel-signup-btn');
+const rsvpIdentityEl = document.getElementById('rsvp-identity');
+const eventForm = document.getElementById('event-form');
+const eventsStatusEl = document.getElementById('events-status');
+const membershipNoteEl = document.getElementById('membership-note');
+const adminPendingWrap = document.getElementById('admin-pending-wrap');
+const joinListEl = document.getElementById('join-requests-list');
+
+showLoginBtn.addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
+showSignupBtn.addEventListener('click', () => { loginForm.style.display = 'none'; signupForm.style.display = 'flex'; });
+cancelLoginBtn.addEventListener('click', () => { loginForm.style.display = 'none'; loginForm.reset(); });
+cancelSignupBtn.addEventListener('click', () => { signupForm.style.display = 'none'; signupForm.reset(); });
+
 if (firebaseConfig.apiKey === 'PASTE_ME') {
-  statusEl.textContent = 'Calendar not connected yet — add your Firebase config in index.html (see README).';
-  form.querySelector('button').disabled = true;
-  document.getElementById('join-form').querySelector('button').disabled = true;
-  document.getElementById('join-requests-list').innerHTML = '<p class="empty-note">Not connected yet.</p>';
+  authStatusEl.textContent = 'Accounts not connected yet — add your Firebase config in index.html (see README).';
+  eventsStatusEl.textContent = 'Calendar not connected yet.';
+  showLoginBtn.disabled = true;
+  showSignupBtn.disabled = true;
 } else {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const {
-      getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc,
-      query, orderBy, where, serverTimestamp
+      getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
+      addDoc, onSnapshot, query, orderBy, where, serverTimestamp
     } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     const {
-      getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+      getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+      signOut, onAuthStateChanged
     } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
-    const googleProvider = new GoogleAuthProvider();
     const eventsCol = collection(db, 'events');
-    const joinCol = collection(db, 'joinRequests');
+    const membersCol = collection(db, 'members');
 
-    const joinForm = document.getElementById('join-form');
-    const joinListEl = document.getElementById('join-requests-list');
-    const authBtn = document.getElementById('admin-auth-btn');
-
-    joinForm.addEventListener('submit', async (e) => {
+    signupForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const rsn = document.getElementById('join-rsn').value.trim();
-      const contact = document.getElementById('join-contact').value.trim();
-      const message = document.getElementById('join-message').value.trim();
-      if (!rsn) return;
+      const rsn = document.getElementById('signup-rsn').value.trim();
+      const email = document.getElementById('signup-email').value.trim();
+      const password = document.getElementById('signup-password').value;
+      const message = document.getElementById('signup-message').value.trim();
+      if (!rsn || !email || !password) return;
       try {
-        await addDoc(joinCol, { rsn, contact, message, status: 'pending', createdAt: serverTimestamp() });
-        joinForm.reset();
-        alert('Request sent. Someone from the guild will reach out.');
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'members', cred.user.uid), {
+          rsn, email, message, status: 'pending', role: 'member', createdAt: serverTimestamp()
+        });
+        signupForm.reset();
+        signupForm.style.display = 'none';
+        alert('Account created. An officer needs to approve it before you can RSVP or add events.');
       } catch (err) {
-        alert('Could not send request: ' + err.message);
+        alert('Could not create account: ' + err.message);
       }
     });
 
-    authBtn.addEventListener('click', async () => {
-      if (auth.currentUser) {
-        await signOut(auth);
-      } else {
-        try {
-          await signInWithPopup(auth, googleProvider);
-        } catch (err) {
-          alert('Sign-in failed: ' + err.message);
-        }
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+        loginForm.reset();
+        loginForm.style.display = 'none';
+      } catch (err) {
+        alert('Log in failed: ' + err.message);
       }
     });
 
-    let unsubscribeRequests = null;
-    onAuthStateChanged(auth, (user) => {
-      if (unsubscribeRequests) { unsubscribeRequests(); unsubscribeRequests = null; }
+    document.getElementById('auth-buttons').addEventListener('click', (e) => {
+      if (e.target.id === 'sign-out-btn') signOut(auth);
+    });
+
+    function setEventControlsEnabled(enabled) {
+      eventForm.querySelectorAll('input, button').forEach((el) => { el.disabled = !enabled; });
+      document.querySelectorAll('.rsvp-btn').forEach((el) => { el.disabled = !enabled; });
+    }
+
+    let currentMember = null;
+    let unsubscribePending = null;
+
+    onAuthStateChanged(auth, async (user) => {
+      if (unsubscribePending) { unsubscribePending(); unsubscribePending = null; }
+      adminPendingWrap.style.display = 'none';
 
       if (!user) {
-        authBtn.textContent = 'Sign in as admin';
-        authBtn.classList.remove('signed-in');
-        joinListEl.innerHTML = '<p class="empty-note">Sign in as an admin to view and manage requests.</p>';
+        currentMember = null;
+        authStatusEl.textContent = 'Not signed in';
+        authStatusEl.className = 'auth-status';
+        document.getElementById('auth-buttons').innerHTML =
+          '<button type="button" id="show-login-btn">Log in</button>' +
+          '<button type="button" id="show-signup-btn">Create account</button>';
+        document.getElementById('show-login-btn').addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
+        document.getElementById('show-signup-btn').addEventListener('click', () => { loginForm.style.display = 'none'; signupForm.style.display = 'flex'; });
+        rsvpIdentityEl.textContent = 'Sign in to RSVP.';
+        membershipNoteEl.textContent = 'New to the guild? Use "Create account" at the top of the page — your request shows up here for an officer to review.';
+        setEventControlsEnabled(false);
+        renderAll();
         return;
       }
 
-      authBtn.textContent = 'Sign out (' + user.email + ')';
-      authBtn.classList.add('signed-in');
-      joinListEl.innerHTML = '<p class="empty-note">Loading&hellip;</p>';
+      let memberData = null;
+      try {
+        const snap = await getDoc(doc(db, 'members', user.uid));
+        memberData = snap.exists() ? snap.data() : null;
+      } catch (err) {
+        memberData = null;
+      }
+      currentMember = memberData ? { uid: user.uid, ...memberData } : null;
 
-      unsubscribeRequests = onSnapshot(
-        query(joinCol, where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
-        (snap) => {
-          if (snap.empty) {
-            joinListEl.innerHTML = '<p class="empty-note">No pending requests.</p>';
-            return;
+      const label = currentMember ? currentMember.rsn : user.email;
+      document.getElementById('auth-buttons').innerHTML =
+        '<button type="button" id="sign-out-btn">Sign out (' + escapeHtml(label) + ')</button>';
+
+      if (!currentMember) {
+        authStatusEl.textContent = 'Signed in, but no membership record found.';
+        authStatusEl.className = 'auth-status declined';
+        setEventControlsEnabled(false);
+        rsvpIdentityEl.textContent = 'Account has no membership record — contact an officer.';
+        renderAll();
+        return;
+      }
+
+      if (currentMember.status === 'pending') {
+        authStatusEl.textContent = 'Signed in as ' + currentMember.rsn + ' — awaiting approval';
+        authStatusEl.className = 'auth-status pending';
+        setEventControlsEnabled(false);
+        rsvpIdentityEl.textContent = 'Your account is awaiting approval before you can RSVP.';
+        membershipNoteEl.textContent = 'Your request is pending review by an officer.';
+      } else if (currentMember.status === 'declined') {
+        authStatusEl.textContent = 'Signed in as ' + currentMember.rsn + ' — request declined';
+        authStatusEl.className = 'auth-status declined';
+        setEventControlsEnabled(false);
+        rsvpIdentityEl.textContent = 'Your request was declined.';
+        membershipNoteEl.textContent = 'Your request was declined by an officer.';
+      } else {
+        authStatusEl.textContent = 'Signed in as ' + currentMember.rsn + (currentMember.role === 'admin' ? ' (admin)' : '');
+        authStatusEl.className = 'auth-status approved';
+        setEventControlsEnabled(true);
+        rsvpIdentityEl.textContent = 'RSVPing as ' + currentMember.rsn;
+        membershipNoteEl.textContent = "You're an approved member.";
+      }
+
+      if (currentMember.role === 'admin') {
+        adminPendingWrap.style.display = '';
+        joinListEl.innerHTML = '<p class="empty-note">Loading&hellip;</p>';
+        unsubscribePending = onSnapshot(
+          query(membersCol, where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
+          (snap) => {
+            if (snap.empty) {
+              joinListEl.innerHTML = '<p class="empty-note">No pending requests.</p>';
+              return;
+            }
+            joinListEl.innerHTML = '';
+            snap.forEach((d) => {
+              const r = d.data();
+              const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
+              const div = document.createElement('div');
+              div.className = 'join-request-card';
+              div.innerHTML =
+                '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
+                '<div class="contact">' + escapeHtml(r.email) + '</div>' +
+                (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
+                '<div class="request-actions">' +
+                  '<button type="button" class="accept-btn">Approve</button>' +
+                  '<button type="button" class="decline-btn">Decline</button>' +
+                '</div>';
+              div.querySelector('.accept-btn').addEventListener('click', async () => {
+                await updateDoc(doc(db, 'members', d.id), { status: 'approved' });
+                alert(r.rsn + ' approved. Remember to add them to players.json to start tracking their stats.');
+              });
+              div.querySelector('.decline-btn').addEventListener('click', async () => {
+                if (confirm('Decline the request from ' + r.rsn + '?')) {
+                  await updateDoc(doc(db, 'members', d.id), { status: 'declined' });
+                }
+              });
+              joinListEl.appendChild(div);
+            });
+          },
+          (err) => {
+            joinListEl.innerHTML = '<p class="empty-note">Could not load requests (' + err.message + ').</p>';
           }
-          joinListEl.innerHTML = '';
-          snap.forEach((d) => {
-            const r = d.data();
-            const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
-            const div = document.createElement('div');
-            div.className = 'join-request-card';
-            div.innerHTML =
-              '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
-              (r.contact ? '<div class="contact">' + escapeHtml(r.contact) + '</div>' : '') +
-              (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
-              '<div class="request-actions">' +
-                '<button type="button" class="accept-btn">Accept</button>' +
-                '<button type="button" class="decline-btn">Decline</button>' +
-              '</div>';
-            div.querySelector('.accept-btn').addEventListener('click', async () => {
-              await updateDoc(doc(db, 'joinRequests', d.id), { status: 'accepted' });
-              alert(r.rsn + ' marked as accepted. Remember to add them to players.json to start tracking their stats.');
-            });
-            div.querySelector('.decline-btn').addEventListener('click', async () => {
-              if (confirm('Decline the request from ' + r.rsn + '?')) {
-                await updateDoc(doc(db, 'joinRequests', d.id), { status: 'declined' });
-              }
-            });
-            joinListEl.appendChild(div);
-          });
-        },
-        (err) => {
-          joinListEl.innerHTML = '<p class="empty-note">Not authorized to view requests (' + err.message + ').</p>';
-        }
-      );
+        );
+      }
+
+      renderAll();
     });
 
-    form.addEventListener('submit', async (e) => {
+    eventForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const title = document.getElementById('event-title').value.trim();
       const timeVal = document.getElementById('event-time').value;
       const notes = document.getElementById('event-notes').value.trim();
       if (!title || !timeVal) return;
-      await addDoc(eventsCol, {
-        title,
-        notes,
-        startTime: new Date(timeVal).toISOString(),
-        createdAt: serverTimestamp(),
-        rsvps: {}
-      });
-      form.reset();
+      try {
+        await addDoc(eventsCol, {
+          title, notes, startTime: new Date(timeVal).toISOString(),
+          createdAt: serverTimestamp(), rsvps: {}
+        });
+        eventForm.reset();
+      } catch (err) {
+        alert('Could not add event (are you an approved member?): ' + err.message);
+      }
     });
+
+    const upcomingEl = document.getElementById('upcoming-events');
+    const pastEl = document.getElementById('past-events');
+    const pastWrap = document.getElementById('past-events-wrap');
 
     function renderEvent(id, ev) {
       const rsvps = ev.rsvps || {};
@@ -863,8 +983,9 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         else if (r.status === 'maybe') maybe.push(r.name);
         else if (r.status === 'no') no.push(r.name);
       });
-      const myKey = keyFor(nameInput.value || '');
-      const myStatus = rsvps[myKey] ? rsvps[myKey].status : null;
+      const canRsvp = currentMember && currentMember.status === 'approved';
+      const myKey = canRsvp ? keyFor(currentMember.rsn) : null;
+      const myStatus = myKey && rsvps[myKey] ? rsvps[myKey].status : null;
 
       const div = document.createElement('div');
       div.className = 'event-card';
@@ -875,10 +996,10 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         '</div>' +
         (ev.notes ? '<p class="event-notes">' + escapeHtml(ev.notes) + '</p>' : '') +
         '<div class="rsvp-row">' +
-          '<button type="button" class="rsvp-btn' + (myStatus==='going'?' active-going':'') + '" data-status="going">Going (' + going.length + ')</button>' +
-          '<button type="button" class="rsvp-btn' + (myStatus==='maybe'?' active-maybe':'') + '" data-status="maybe">Maybe (' + maybe.length + ')</button>' +
-          '<button type="button" class="rsvp-btn' + (myStatus==='no'?' active-no':'') + '" data-status="no">Can\'t go (' + no.length + ')</button>' +
-          '<button type="button" class="delete-event" style="margin-left:auto">remove</button>' +
+          '<button type="button" class="rsvp-btn' + (myStatus==='going'?' active-going':'') + '" data-status="going"' + (canRsvp?'':' disabled') + '>Going (' + going.length + ')</button>' +
+          '<button type="button" class="rsvp-btn' + (myStatus==='maybe'?' active-maybe':'') + '" data-status="maybe"' + (canRsvp?'':' disabled') + '>Maybe (' + maybe.length + ')</button>' +
+          '<button type="button" class="rsvp-btn' + (myStatus==='no'?' active-no':'') + '" data-status="no"' + (canRsvp?'':' disabled') + '>Can\'t go (' + no.length + ')</button>' +
+          '<button type="button" class="delete-event" style="margin-left:auto"' + (canRsvp?'':' disabled') + '>remove</button>' +
         '</div>' +
         '<div class="rsvp-summary">' +
           (going.length ? '<span class="going-names">Going: ' + going.map(escapeHtml).join(', ') + '</span><br>' : '') +
@@ -888,17 +1009,21 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
 
       div.querySelectorAll('.rsvp-btn').forEach((btn) => {
         btn.addEventListener('click', async () => {
-          const name = currentName();
-          if (!name) return;
-          const key = keyFor(name);
-          await updateDoc(doc(db, 'events', id), {
-            ['rsvps.' + key]: { name, status: btn.dataset.status }
-          });
+          if (!canRsvp) return;
+          try {
+            await updateDoc(doc(db, 'events', id), {
+              ['rsvps.' + myKey]: { name: currentMember.rsn, status: btn.dataset.status }
+            });
+          } catch (err) {
+            alert('Could not RSVP: ' + err.message);
+          }
         });
       });
       div.querySelector('.delete-event').addEventListener('click', async () => {
+        if (!canRsvp) return;
         if (confirm('Remove "' + ev.title + '"?')) {
-          await deleteDoc(doc(db, 'events', id));
+          try { await deleteDoc(doc(db, 'events', id)); }
+          catch (err) { alert('Could not remove event: ' + err.message); }
         }
       });
       return div;
@@ -915,7 +1040,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
 
       upcomingEl.innerHTML = '';
       if (upcoming.length === 0) {
-        upcomingEl.innerHTML = '<p class="empty-note">No upcoming events yet — add one above.</p>';
+        upcomingEl.innerHTML = '<p class="empty-note">No upcoming events yet.</p>';
       } else {
         upcoming.forEach(([id, ev]) => upcomingEl.appendChild(renderEvent(id, ev)));
       }
@@ -924,16 +1049,16 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       past.reverse().forEach(([id, ev]) => pastEl.appendChild(renderEvent(id, ev)));
       pastWrap.style.display = past.length ? '' : 'none';
     }
-    nameInput.addEventListener('input', renderAll);
 
     onSnapshot(query(eventsCol, orderBy('startTime', 'asc')), (snap) => {
       latestDocs = [];
       snap.forEach((d) => latestDocs.push([d.id, d.data()]));
       renderAll();
-      statusEl.textContent = '';
+      eventsStatusEl.textContent = '';
     });
   } catch (err) {
-    statusEl.textContent = 'Could not connect to the events calendar (' + err.message + ').';
+    authStatusEl.textContent = 'Could not connect (' + err.message + ').';
+    eventsStatusEl.textContent = 'Could not connect to the events calendar (' + err.message + ').';
   }
 }
 </script>

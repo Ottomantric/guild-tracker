@@ -295,6 +295,118 @@
     font-size: 0.78rem;
     color: var(--muted);
   }
+
+  .tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 2rem;
+  }
+  .tab-btn {
+    background: none;
+    border: 1px solid var(--panel-border);
+    color: var(--muted);
+    padding: 0.55rem 1.1rem;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    cursor: pointer;
+  }
+  .tab-btn:hover { color: var(--parchment); border-color: var(--gold); }
+  .tab-btn.active {
+    color: var(--gold-bright);
+    border-color: var(--gold);
+    background: var(--panel);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .about-panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 1.4rem 1.5rem;
+    margin-bottom: 2rem;
+  }
+  .about-panel h2 {
+    margin: 0 0 0.7rem;
+    font-size: 1.3rem;
+    color: var(--gold-bright);
+    font-weight: normal;
+  }
+  .about-panel p {
+    font-size: 0.92rem;
+    line-height: 1.7;
+    color: var(--parchment);
+    margin: 0 0 0.8rem;
+  }
+  .about-panel p:last-child { margin-bottom: 0; }
+
+  .join-panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 2rem;
+  }
+  .join-panel h2 {
+    margin: 0 0 0.4rem;
+    font-size: 1.1rem;
+    color: var(--gold-bright);
+    font-weight: normal;
+  }
+  .join-panel .lead {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0 0 1rem;
+  }
+  .join-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+  .join-form input.rsn { flex: 1 1 140px; }
+  .join-form input.contact { flex: 1 1 160px; }
+  .join-form input.message { flex: 2 1 220px; }
+  .join-requests {
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--panel-border);
+  }
+  .join-requests h3 {
+    margin: 0 0 0.8rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: normal;
+  }
+  .join-request-card {
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 0.8rem 1rem;
+    margin-bottom: 0.6rem;
+    font-size: 0.85rem;
+  }
+  .join-request-card:last-child { margin-bottom: 0; }
+  .join-request-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+  .join-request-head .rsn { color: var(--gold-bright); }
+  .join-request-head .when {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .join-request-card .contact {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin: 0.3rem 0;
+  }
+  .join-request-card .message { color: var(--parchment); margin: 0.3rem 0 0.6rem; }
 </style>
 </head>
 <body>
@@ -302,52 +414,128 @@
 
   <header>
     <h1>Guild Tracker</h1>
-    <p class="subtitle">Auto-updated every 6 hours via GitHub Actions</p>
+    <p class="subtitle">Auto-updated every 2 hours via GitHub Actions</p>
   </header>
 
-  <div class="status-line" id="status">Loading history&hellip;</div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="home">Home</button>
+    <button class="tab-btn" data-tab="stats">Player stats</button>
+    <button class="tab-btn" data-tab="calendar">Calendar</button>
+  </nav>
 
-  <div class="leaderboard" id="leaderboard" style="display:none">
-    <h2>XP gained &mdash; last 7 days</h2>
-    <table>
-      <thead><tr><th>Player</th><th class="num">XP this week</th><th class="num">Total level</th><th class="num">Total XP</th></tr></thead>
-      <tbody id="leaderboard-body"></tbody>
-    </table>
-  </div>
+  <section class="tab-panel active" id="tab-home">
 
-  <div class="events">
-    <h2>Upcoming events</h2>
-    <div class="name-row">
-      <span>RSVPing as:</span>
-      <input type="text" id="rsvp-name" placeholder="Your RSN">
-      <span id="events-status" class="empty-note"></span>
+    <div class="about-panel">
+      <h2>About the guild</h2>
+      <p>
+        We're a small, laid-back RS3 clan built around one idea: progress is
+        more fun when someone's watching your grind and cheering it on. Whether
+        you're chasing max cape, working through Dungeoneering floors, or just
+        killing time in Prifddinas, there's always someone here doing something
+        similar.
+      </p>
+      <p>
+        No strict activity quotas, no drama &mdash; just a group that shows up
+        for boss nights, helps with quests nobody wants to solo, and tracks
+        each other's XP gains mostly so we have something to rib each other
+        about.
+      </p>
+      <p class="empty-note">(This is placeholder copy &mdash; edit the About section in index.html to make it sound like your actual guild.)</p>
     </div>
-    <form class="event-form" id="event-form">
-      <input type="text" class="title" id="event-title" placeholder="Event name, e.g. Barrows run" required>
-      <input type="datetime-local" id="event-time" required>
-      <input type="text" class="notes" id="event-notes" placeholder="Notes (optional)">
-      <button type="submit">Add event</button>
-    </form>
-    <div id="upcoming-events"></div>
-    <details class="past-events" id="past-events-wrap" style="display:none">
-      <summary>Past events &#9656;</summary>
-      <div id="past-events"></div>
-    </details>
-  </div>
 
-  <div class="roster" id="roster"></div>
+    <div class="leaderboard">
+      <h2>Leaderboard &mdash; total level</h2>
+      <table>
+        <thead><tr><th>Rank</th><th>Player</th><th class="num">Total level</th><th class="num">Total XP</th></tr></thead>
+        <tbody id="home-leaderboard-body"></tbody>
+      </table>
+    </div>
 
-  <div class="disclaimer">
-    <strong>How this works.</strong> A GitHub Actions workflow fetches everyone's RS3
-    hiscores directly from Jagex every 6 hours and appends a snapshot to
-    <code>data/history.json</code> in this repo. This page reads that file directly, so
-    there's no CORS proxy in the loop at all &mdash; that fragility from the earlier
-    prototype is gone. Weekly XP is the difference between the most recent snapshot and
-    the snapshot closest to 7 days before it, so figures firm up as more history
-    accumulates.
-  </div>
+    <div class="join-panel">
+      <h2>Want to join?</h2>
+      <p class="lead">Send us your RS3 username and a way to reach you &mdash; someone will follow up.</p>
+      <form class="join-form" id="join-form">
+        <input type="text" class="rsn" id="join-rsn" placeholder="Your RSN" required>
+        <input type="text" class="contact" id="join-contact" placeholder="Discord or email (optional)">
+        <input type="text" class="message" id="join-message" placeholder="Anything else? (optional)">
+        <button type="submit">Send request</button>
+      </form>
+      <div class="join-requests">
+        <h3>Pending requests</h3>
+        <div id="join-requests-list"><p class="empty-note">Loading&hellip;</p></div>
+      </div>
+    </div>
+
+  </section>
+
+  <section class="tab-panel" id="tab-stats">
+
+    <div class="status-line" id="status">Loading history&hellip;</div>
+
+    <div class="leaderboard" id="leaderboard" style="display:none">
+      <h2>XP gained &mdash; last 7 days</h2>
+      <table>
+        <thead><tr><th>Player</th><th class="num">XP this week</th><th class="num">Total level</th><th class="num">Total XP</th></tr></thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+
+    <div class="roster" id="roster"></div>
+
+    <div class="disclaimer">
+      <strong>How this works.</strong> A GitHub Actions workflow fetches everyone's RS3
+      hiscores directly from Jagex every 2 hours and appends a snapshot to
+      <code>data/history.json</code> in this repo. This page reads that file directly, so
+      there's no CORS proxy in the loop at all &mdash; that fragility from the earlier
+      prototype is gone. Weekly XP is the difference between the most recent snapshot and
+      the snapshot closest to 7 days before it, so figures firm up as more history
+      accumulates.
+    </div>
+
+  </section>
+
+  <section class="tab-panel" id="tab-calendar">
+
+    <div class="events">
+      <h2>Upcoming events</h2>
+      <div class="name-row">
+        <span>RSVPing as:</span>
+        <input type="text" id="rsvp-name" placeholder="Your RSN">
+        <span id="events-status" class="empty-note"></span>
+      </div>
+      <form class="event-form" id="event-form">
+        <input type="text" class="title" id="event-title" placeholder="Event name, e.g. Barrows run" required>
+        <input type="datetime-local" id="event-time" required>
+        <input type="text" class="notes" id="event-notes" placeholder="Notes (optional)">
+        <button type="submit">Add event</button>
+      </form>
+      <div id="upcoming-events"></div>
+      <details class="past-events" id="past-events-wrap" style="display:none">
+        <summary>Past events &#9656;</summary>
+        <div id="past-events"></div>
+      </details>
+    </div>
+
+  </section>
 
 </div>
+
+<script>
+const TAB_BUTTONS = document.querySelectorAll('.tab-btn');
+const TAB_PANELS = document.querySelectorAll('.tab-panel');
+function activateTab(name) {
+  TAB_BUTTONS.forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
+  TAB_PANELS.forEach((p) => p.classList.toggle('active', p.id === 'tab-' + name));
+}
+TAB_BUTTONS.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    activateTab(btn.dataset.tab);
+    history.replaceState(null, '', '#' + btn.dataset.tab);
+  });
+});
+const initialTab = (location.hash || '').replace('#', '');
+if (['home', 'stats', 'calendar'].includes(initialTab)) activateTab(initialTab);
+</script>
 
 <script>
 const SKILL_ORDER = [
@@ -430,6 +618,14 @@ async function load() {
       '<td class="num">' + fmt(overall.xp) + '</td></tr>';
   }).join('');
   document.getElementById('leaderboard').style.display = '';
+
+  const byLevel = [...names].sort((a, b) => latest.players[b].Overall.level - latest.players[a].Overall.level);
+  document.getElementById('home-leaderboard-body').innerHTML = byLevel.map((name, i) => {
+    const overall = latest.players[name].Overall;
+    return '<tr><td>' + (i + 1) + '</td><td>' + name + '</td>' +
+      '<td class="num">' + fmt(overall.level) + '</td>' +
+      '<td class="num">' + fmt(overall.xp) + '</td></tr>';
+  }).join('');
 
   const rosterEl = document.getElementById('roster');
   rosterEl.innerHTML = names.map((name) => {
@@ -514,6 +710,8 @@ function currentName() {
 if (firebaseConfig.apiKey === 'PASTE_ME') {
   statusEl.textContent = 'Calendar not connected yet — add your Firebase config in index.html (see README).';
   form.querySelector('button').disabled = true;
+  document.getElementById('join-form').querySelector('button').disabled = true;
+  document.getElementById('join-requests-list').innerHTML = '<p class="empty-note">Not connected yet.</p>';
 } else {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
@@ -525,6 +723,46 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const eventsCol = collection(db, 'events');
+    const joinCol = collection(db, 'joinRequests');
+
+    const joinForm = document.getElementById('join-form');
+    const joinListEl = document.getElementById('join-requests-list');
+
+    joinForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const rsn = document.getElementById('join-rsn').value.trim();
+      const contact = document.getElementById('join-contact').value.trim();
+      const message = document.getElementById('join-message').value.trim();
+      if (!rsn) return;
+      await addDoc(joinCol, { rsn, contact, message, createdAt: serverTimestamp() });
+      joinForm.reset();
+      alert('Request sent. Someone from the guild will reach out.');
+    });
+
+    onSnapshot(query(joinCol, orderBy('createdAt', 'desc')), (snap) => {
+      if (snap.empty) {
+        joinListEl.innerHTML = '<p class="empty-note">No pending requests.</p>';
+        return;
+      }
+      joinListEl.innerHTML = '';
+      snap.forEach((d) => {
+        const r = d.data();
+        const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
+        const div = document.createElement('div');
+        div.className = 'join-request-card';
+        div.innerHTML =
+          '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
+          (r.contact ? '<div class="contact">' + escapeHtml(r.contact) + '</div>' : '') +
+          (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
+          '<button type="button" class="delete-event dismiss-request">dismiss</button>';
+        div.querySelector('.dismiss-request').addEventListener('click', async () => {
+          if (confirm('Dismiss this request from ' + r.rsn + '?')) {
+            await deleteDoc(doc(db, 'joinRequests', d.id));
+          }
+        });
+        joinListEl.appendChild(div);
+      });
+    });
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();

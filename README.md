@@ -123,9 +123,29 @@ the page; no server of your own to run).
          allow read: if true;
          allow create, update, delete: if isApproved();
        }
+
+       match /forumPosts/{postId} {
+         allow read: if true;
+         allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
+         allow update: if isApproved();
+         allow delete: if isAdmin() || (isApproved() && resource.data.authorUid == request.auth.uid);
+
+         match /comments/{commentId} {
+           allow read: if true;
+           allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
+           allow delete: if isAdmin() || (isApproved() && resource.data.authorUid == request.auth.uid);
+         }
+       }
      }
    }
    ```
+
+   The forum follows the same pattern as events: anyone can read posts and
+   replies, but only approved members can create them. `update` on a post is
+   left open to any approved member because that's how liking/disliking
+   works (it patches a `votes` map field on the post) — same trust model as
+   events, where any approved member can already edit or remove any event.
+   Deleting a post or reply is limited to its author or an admin.
 
    A few things this setup is doing on purpose:
    - Anyone can create their own `members` document (that's what happens
@@ -158,23 +178,38 @@ the page; no server of your own to run).
 
 ## Managing admins
 
-To make someone else an admin, open their document under **Firestore
-Database -> Data -> members** and set `role` to `admin` (they still need
-`status: approved` too, which they'll already have if you approved their
-sign-up). To remove admin access, change `role` back to `member`.
+An **Admin** tab appears in the top nav automatically for anyone signed in
+with `role: admin` — it's hidden from everyone else. It has two panels:
+**Pending requests** (Approve/Decline, same as before) and **All members**,
+a table of every account with buttons to approve/decline their status,
+toggle admin access on or off, or remove their membership record entirely.
+Day-to-day moderation should never need the Firebase console after the
+bootstrap step below — the one thing that still needs a manual Firestore
+edit is turning your *own* first account into an admin, since nobody can
+grant that from inside the site before at least one admin exists.
 
-Approving or declining a sign-up doesn't touch their login (that's a separate
-Firebase Authentication record) — it only controls what they can do on the
-site. If you want to fully remove someone's ability to even sign in again,
-that's in **Authentication -> Users**, where you can disable or delete the
-account.
+To make someone else an admin going forward, just sign in as an existing
+admin, go to the Admin tab, find them in the "All members" table, and click
+**Make admin**. Removing a member's record (the "Remove" button) doesn't
+delete their Firebase Authentication login — it only revokes their access to
+gated features on the site. If you want to prevent them from signing in at
+all, that's in **Authentication -> Users** in the Firebase console, where
+you can disable or delete the account directly.
 
 ## Notes
 
-- The page now has three tabs: **Home** (about blurb, total-level leaderboard,
+- The page now has tabs: **Home** (about blurb, total-level leaderboard,
   account sign-up and membership status), **Player stats** (the weekly XP
-  dashboard), and **Calendar** (events/RSVP). Switching tabs updates the URL
-  hash (`#home`, `#stats`, `#calendar`) so you can link directly to one.
+  dashboard), **Calendar** (events/RSVP), **Forum** (posts, likes/dislikes,
+  replies), and **Admin** (visible only to admins). Switching tabs updates
+  the URL hash (`#home`, `#stats`, `#calendar`, `#forum`, `#admin`) so you
+  can link directly to one.
+- Anyone can read forum posts and replies without an account; only approved
+  members can post, vote, or reply. A post's author (or any admin) can
+  delete it; the same goes for individual replies.
+- Liking and disliking are mutually exclusive per person per post — clicking
+  the option you already picked removes your vote instead of adding a
+  second one.
 - The "About the guild" text on the Home tab is placeholder copy — edit the
   `<div class="about-panel">` block in `index.html` to describe your actual
   guild.

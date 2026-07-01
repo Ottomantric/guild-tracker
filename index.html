@@ -411,6 +411,32 @@
   .remove-member-btn { border-color: var(--red); color: var(--red); }
   #tab-admin table { font-size: 0.8rem; }
   #tab-admin td { vertical-align: top; }
+
+  textarea, select {
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    color: var(--parchment);
+    padding: 0.5rem 0.7rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+  }
+  textarea { width: 100%; min-height: 80px; resize: vertical; flex: 1 1 100%; }
+  .forum-post .event-notes { color: var(--parchment); white-space: pre-wrap; }
+  .comments-list { margin-top: 0.6rem; }
+  .comment-item {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #2a2418;
+    font-size: 0.85rem;
+  }
+  .comment-item:last-child { border-bottom: none; }
+  .comment-meta {
+    font-family: 'Courier New', monospace;
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
+  }
+  .delete-comment { font-size: 0.68rem; padding: 0; margin-left: 0.4rem; }
   .join-request-card {
     border: 1px solid var(--panel-border);
     border-radius: 6px;
@@ -507,6 +533,7 @@
     <button class="tab-btn active" data-tab="home">Home</button>
     <button class="tab-btn" data-tab="stats">Player stats</button>
     <button class="tab-btn" data-tab="calendar">Calendar</button>
+    <button class="tab-btn" data-tab="forum">Forum</button>
     <button class="tab-btn" data-tab="admin" id="admin-tab-btn" style="display:none">Admin</button>
   </nav>
 
@@ -594,6 +621,27 @@
 
   </section>
 
+  <section class="tab-panel" id="tab-forum">
+
+    <div class="events">
+      <h2>New post</h2>
+      <form class="event-form" id="post-form">
+        <input type="text" class="title" id="post-title" placeholder="Title" required style="flex:1 1 200px">
+        <select id="post-category">
+          <option value="question">Question</option>
+          <option value="guide">Guide</option>
+          <option value="discussion">Discussion</option>
+        </select>
+        <textarea id="post-body" placeholder="Write your post&hellip;" required></textarea>
+        <button type="submit">Post</button>
+      </form>
+      <p class="empty-note" id="forum-status"></p>
+    </div>
+
+    <div id="forum-feed"></div>
+
+  </section>
+
   <section class="tab-panel" id="tab-admin">
 
     <div class="join-panel">
@@ -627,7 +675,7 @@ TAB_BUTTONS.forEach((btn) => {
   });
 });
 const initialTab = (location.hash || '').replace('#', '');
-if (['home', 'stats', 'calendar', 'admin'].includes(initialTab)) activateTab(initialTab);
+if (['home', 'stats', 'calendar', 'admin', 'forum'].includes(initialTab)) activateTab(initialTab);
 </script>
 
 <script>
@@ -794,6 +842,9 @@ const eventForm = document.getElementById('event-form');
 const eventsStatusEl = document.getElementById('events-status');
 const membershipNoteEl = document.getElementById('membership-note');
 const joinListEl = document.getElementById('join-requests-list');
+const postForm = document.getElementById('post-form');
+const forumFeedEl = document.getElementById('forum-feed');
+const forumStatusEl = document.getElementById('forum-status');
 
 showLoginBtn.addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
 showSignupBtn.addEventListener('click', () => { loginForm.style.display = 'none'; signupForm.style.display = 'flex'; });
@@ -803,13 +854,14 @@ cancelSignupBtn.addEventListener('click', () => { signupForm.style.display = 'no
 if (firebaseConfig.apiKey === 'PASTE_ME') {
   authStatusEl.textContent = 'Accounts not connected yet — add your Firebase config in index.html (see README).';
   eventsStatusEl.textContent = 'Calendar not connected yet.';
+  forumStatusEl.textContent = 'Forum not connected yet.';
   showLoginBtn.disabled = true;
   showSignupBtn.disabled = true;
 } else {
   try {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const {
-      getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
+      getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField,
       addDoc, onSnapshot, query, orderBy, serverTimestamp
     } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     const {
@@ -822,6 +874,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const auth = getAuth(app);
     const eventsCol = collection(db, 'events');
     const membersCol = collection(db, 'members');
+    const forumCol = collection(db, 'forumPosts');
 
     signupForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -865,6 +918,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
 
     function setEventControlsEnabled(enabled) {
       eventForm.querySelectorAll('input, button').forEach((el) => { el.disabled = !enabled; });
+      postForm.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = !enabled; });
       document.querySelectorAll('.rsvp-btn').forEach((el) => { el.disabled = !enabled; });
     }
 
@@ -891,6 +945,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         membershipNoteEl.textContent = 'New to the guild? Use "Create account" at the top of the page — your request will be reviewed by an officer.';
         setEventControlsEnabled(false);
         renderAll();
+        renderForumFeed();
         return;
       }
 
@@ -913,6 +968,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         setEventControlsEnabled(false);
         rsvpIdentityEl.textContent = 'Account has no membership record — contact an officer.';
         renderAll();
+        renderForumFeed();
         return;
       }
 
@@ -1020,6 +1076,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       }
 
       renderAll();
+      renderForumFeed();
     });
 
     eventForm.addEventListener('submit', async (e) => {
@@ -1123,6 +1180,172 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       snap.forEach((d) => latestDocs.push([d.id, d.data()]));
       renderAll();
       eventsStatusEl.textContent = '';
+    });
+
+    postForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('post-title').value.trim();
+      const category = document.getElementById('post-category').value;
+      const body = document.getElementById('post-body').value.trim();
+      if (!title || !body || !currentMember) return;
+      try {
+        await addDoc(forumCol, {
+          title, category, body,
+          authorUid: currentMember.uid,
+          authorRsn: currentMember.rsn,
+          createdAt: serverTimestamp(),
+          votes: {}
+        });
+        postForm.reset();
+      } catch (err) {
+        alert('Could not post (are you an approved member?): ' + err.message);
+      }
+    });
+
+    function renderPost(id, post) {
+      const votes = post.votes || {};
+      let likeCount = 0, dislikeCount = 0;
+      Object.values(votes).forEach((v) => {
+        if (v === 'like') likeCount++;
+        else if (v === 'dislike') dislikeCount++;
+      });
+      const canWrite = !!(currentMember && currentMember.status === 'approved');
+      const myVote = (canWrite && votes[currentMember.uid]) || null;
+      const canModerate = canWrite && (post.authorUid === currentMember.uid || currentMember.role === 'admin');
+      const when = post.createdAt ? post.createdAt.toDate().toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+
+      const div = document.createElement('div');
+      div.className = 'event-card forum-post';
+      div.innerHTML =
+        '<div class="event-head">' +
+          '<span class="event-title">' + escapeHtml(post.title) + '</span>' +
+          '<span class="event-time">' + escapeHtml(post.category || 'discussion') + ' &middot; ' + escapeHtml(post.authorRsn) + ' &middot; ' + when + '</span>' +
+        '</div>' +
+        '<p class="event-notes">' + escapeHtml(post.body).replace(/\n/g, '<br>') + '</p>' +
+        '<div class="rsvp-row">' +
+          '<button type="button" class="rsvp-btn vote-btn' + (myVote==='like'?' active-going':'') + '" data-vote="like"' + (canWrite?'':' disabled') + '>Like (' + likeCount + ')</button>' +
+          '<button type="button" class="rsvp-btn vote-btn' + (myVote==='dislike'?' active-no':'') + '" data-vote="dislike"' + (canWrite?'':' disabled') + '>Dislike (' + dislikeCount + ')</button>' +
+          (canModerate ? '<button type="button" class="delete-event delete-post" style="margin-left:auto">delete</button>' : '') +
+        '</div>' +
+        '<details class="past-events post-comments">' +
+          '<summary>Replies &#9656;</summary>' +
+          '<div class="comments-list"><p class="empty-note">Loading&hellip;</p></div>' +
+          '<form class="event-form reply-form" style="margin-top:0.6rem">' +
+            '<input type="text" class="reply-input" placeholder="Write a reply&hellip;" style="flex:1"' + (canWrite?'':' disabled') + '>' +
+            '<button type="submit"' + (canWrite?'':' disabled') + '>Reply</button>' +
+          '</form>' +
+        '</details>';
+
+      div.querySelectorAll('.vote-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          if (!canWrite) return;
+          const vote = btn.dataset.vote;
+          const fieldPath = 'votes.' + currentMember.uid;
+          try {
+            if (myVote === vote) {
+              await updateDoc(doc(db, 'forumPosts', id), { [fieldPath]: deleteField() });
+            } else {
+              await updateDoc(doc(db, 'forumPosts', id), { [fieldPath]: vote });
+            }
+          } catch (err) {
+            alert('Could not vote: ' + err.message);
+          }
+        });
+      });
+
+      const deletePostBtn = div.querySelector('.delete-post');
+      if (deletePostBtn) {
+        deletePostBtn.addEventListener('click', async () => {
+          if (confirm('Delete this post?')) {
+            try { await deleteDoc(doc(db, 'forumPosts', id)); }
+            catch (err) { alert('Could not delete: ' + err.message); }
+          }
+        });
+      }
+
+      let commentsUnsub = null;
+      const detailsEl = div.querySelector('.post-comments');
+      const commentsListEl = div.querySelector('.comments-list');
+      detailsEl.addEventListener('toggle', () => {
+        if (detailsEl.open && !commentsUnsub) {
+          commentsUnsub = onSnapshot(
+            query(collection(db, 'forumPosts', id, 'comments'), orderBy('createdAt', 'asc')),
+            (csnap) => {
+              if (csnap.empty) {
+                commentsListEl.innerHTML = '<p class="empty-note">No replies yet.</p>';
+                return;
+              }
+              commentsListEl.innerHTML = '';
+              csnap.forEach((cd) => {
+                const c = cd.data();
+                const cwhen = c.createdAt ? c.createdAt.toDate().toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+                const canDeleteComment = canWrite && (c.authorUid === currentMember.uid || currentMember.role === 'admin');
+                const item = document.createElement('div');
+                item.className = 'comment-item';
+                item.innerHTML =
+                  '<div class="comment-meta">' + escapeHtml(c.authorRsn) + ' &middot; ' + cwhen +
+                  (canDeleteComment ? ' &middot; <button type="button" class="delete-event delete-comment">delete</button>' : '') +
+                  '</div>' +
+                  '<div>' + escapeHtml(c.body).replace(/\n/g, '<br>') + '</div>';
+                const delCommentBtn = item.querySelector('.delete-comment');
+                if (delCommentBtn) {
+                  delCommentBtn.addEventListener('click', async () => {
+                    if (confirm('Delete this reply?')) {
+                      try { await deleteDoc(doc(db, 'forumPosts', id, 'comments', cd.id)); }
+                      catch (err) { alert('Could not delete: ' + err.message); }
+                    }
+                  });
+                }
+                commentsListEl.appendChild(item);
+              });
+            },
+            (err) => {
+              commentsListEl.innerHTML = '<p class="empty-note">Could not load replies (' + escapeHtml(err.message) + ').</p>';
+            }
+          );
+        } else if (!detailsEl.open && commentsUnsub) {
+          commentsUnsub();
+          commentsUnsub = null;
+        }
+      });
+
+      const replyForm = div.querySelector('.reply-form');
+      replyForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!canWrite) return;
+        const input = replyForm.querySelector('.reply-input');
+        const body = input.value.trim();
+        if (!body) return;
+        try {
+          await addDoc(collection(db, 'forumPosts', id, 'comments'), {
+            body, authorUid: currentMember.uid, authorRsn: currentMember.rsn, createdAt: serverTimestamp()
+          });
+          input.value = '';
+        } catch (err) {
+          alert('Could not reply: ' + err.message);
+        }
+      });
+
+      return div;
+    }
+
+    let latestPosts = [];
+    function renderForumFeed() {
+      forumFeedEl.innerHTML = '';
+      if (latestPosts.length === 0) {
+        forumFeedEl.innerHTML = '<p class="empty-note">No posts yet — be the first to post.</p>';
+        return;
+      }
+      latestPosts.forEach(([id, post]) => forumFeedEl.appendChild(renderPost(id, post)));
+    }
+
+    onSnapshot(query(forumCol, orderBy('createdAt', 'desc')), (snap) => {
+      latestPosts = [];
+      snap.forEach((d) => latestPosts.push([d.id, d.data()]));
+      renderForumFeed();
+      forumStatusEl.textContent = '';
+    }, (err) => {
+      forumStatusEl.textContent = 'Could not load forum posts (' + err.message + ').';
     });
   } catch (err) {
     authStatusEl.textContent = 'Could not connect (' + err.message + ').';

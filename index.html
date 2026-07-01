@@ -862,7 +862,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const {
       getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField,
-      addDoc, onSnapshot, query, orderBy, serverTimestamp
+      arrayUnion, arrayRemove, addDoc, onSnapshot, query, orderBy, serverTimestamp
     } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     const {
       getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -875,6 +875,22 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const eventsCol = collection(db, 'events');
     const membersCol = collection(db, 'members');
     const forumCol = collection(db, 'forumPosts');
+    const rosterRef = doc(db, 'publicRoster', 'roster');
+
+    async function addToRoster(rsn) {
+      try {
+        await setDoc(rosterRef, { rsns: arrayUnion(rsn) }, { merge: true });
+      } catch (err) {
+        console.error('Could not add to public roster:', err.message);
+      }
+    }
+    async function removeFromRoster(rsn) {
+      try {
+        await updateDoc(rosterRef, { rsns: arrayRemove(rsn) });
+      } catch (err) {
+        console.error('Could not remove from public roster:', err.message);
+      }
+    }
 
     signupForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1022,11 +1038,13 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
                   '</div>';
                 div.querySelector('.accept-btn').addEventListener('click', async () => {
                   await updateDoc(doc(db, 'members', r.id), { status: 'approved' });
-                  alert(r.rsn + ' approved. Remember to add them to players.json to start tracking their stats.');
+                  await addToRoster(r.rsn);
+                  alert(r.rsn + ' approved — they\'ll show up on Player stats automatically once the next hiscores update runs.');
                 });
                 div.querySelector('.decline-btn').addEventListener('click', async () => {
                   if (confirm('Decline the request from ' + r.rsn + '?')) {
                     await updateDoc(doc(db, 'members', r.id), { status: 'declined' });
+                    await removeFromRoster(r.rsn);
                   }
                 });
                 joinListEl.appendChild(div);
@@ -1051,9 +1069,13 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
                 '</div></td>';
               tr.querySelector('.status-approve')?.addEventListener('click', async () => {
                 await updateDoc(doc(db, 'members', m.id), { status: 'approved' });
+                await addToRoster(m.rsn);
               });
               tr.querySelector('.status-decline')?.addEventListener('click', async () => {
-                if (confirm('Decline ' + m.rsn + '?')) await updateDoc(doc(db, 'members', m.id), { status: 'declined' });
+                if (confirm('Decline ' + m.rsn + '?')) {
+                  await updateDoc(doc(db, 'members', m.id), { status: 'declined' });
+                  await removeFromRoster(m.rsn);
+                }
               });
               tr.querySelector('.toggle-role').addEventListener('click', async () => {
                 const newRole = isAdminRole ? 'member' : 'admin';
@@ -1063,6 +1085,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
               tr.querySelector('.remove-member-btn')?.addEventListener('click', async () => {
                 if (confirm('Remove ' + m.rsn + '\'s membership record? Their login stays active but they lose site access unless they sign up again.')) {
                   await deleteDoc(doc(db, 'members', m.id));
+                  await removeFromRoster(m.rsn);
                 }
               });
               allMembersBody.appendChild(tr);

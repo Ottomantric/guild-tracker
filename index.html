@@ -174,6 +174,127 @@
     font-family: Georgia, serif;
   }
   .disclaimer strong { color: var(--parchment); }
+
+  button {
+    background: var(--panel);
+    border: 1px solid var(--gold);
+    color: var(--gold-bright);
+    padding: 0.5rem 0.9rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+  }
+  button:hover { background: #2a2418; }
+  input[type=text], input[type=datetime-local] {
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    color: var(--parchment);
+    padding: 0.5rem 0.7rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+  }
+
+  .events {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 2rem;
+  }
+  .events h2 {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    color: var(--gold-bright);
+    font-weight: normal;
+  }
+  .name-row {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+  .name-row input { width: 160px; }
+  .event-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--panel-border);
+  }
+  .event-form input.title { flex: 1 1 160px; }
+  .event-form input.notes { flex: 2 1 200px; }
+  .event-card {
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 0.7rem;
+  }
+  .event-card:last-child { margin-bottom: 0; }
+  .event-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .event-title { font-size: 1.05rem; color: var(--parchment); }
+  .event-time {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .event-notes {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.4rem 0 0.8rem;
+  }
+  .rsvp-row { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
+  .rsvp-btn {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.72rem;
+    border-color: var(--panel-border);
+    color: var(--muted);
+  }
+  .rsvp-btn.active-going { border-color: var(--green); color: var(--green); }
+  .rsvp-btn.active-maybe { border-color: var(--gold); color: var(--gold-bright); }
+  .rsvp-btn.active-no { border-color: var(--red); color: var(--red); }
+  .rsvp-summary {
+    font-family: 'Courier New', monospace;
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin-top: 0.6rem;
+    line-height: 1.6;
+  }
+  .rsvp-summary .going-names { color: var(--green); }
+  .delete-event {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.7rem;
+    font-family: 'Courier New', monospace;
+    padding: 0;
+  }
+  .delete-event:hover { color: var(--red); }
+  .past-events summary {
+    cursor: pointer;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    padding: 0.4rem 0;
+    list-style: none;
+  }
+  .past-events summary::-webkit-details-marker { display: none; }
+  .empty-note {
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
 </style>
 </head>
 <body>
@@ -192,6 +313,26 @@
       <thead><tr><th>Player</th><th class="num">XP this week</th><th class="num">Total level</th><th class="num">Total XP</th></tr></thead>
       <tbody id="leaderboard-body"></tbody>
     </table>
+  </div>
+
+  <div class="events">
+    <h2>Upcoming events</h2>
+    <div class="name-row">
+      <span>RSVPing as:</span>
+      <input type="text" id="rsvp-name" placeholder="Your RSN">
+      <span id="events-status" class="empty-note"></span>
+    </div>
+    <form class="event-form" id="event-form">
+      <input type="text" class="title" id="event-title" placeholder="Event name, e.g. Barrows run" required>
+      <input type="datetime-local" id="event-time" required>
+      <input type="text" class="notes" id="event-notes" placeholder="Notes (optional)">
+      <button type="submit">Add event</button>
+    </form>
+    <div id="upcoming-events"></div>
+    <details class="past-events" id="past-events-wrap" style="display:none">
+      <summary>Past events &#9656;</summary>
+      <div id="past-events"></div>
+    </details>
   </div>
 
   <div class="roster" id="roster"></div>
@@ -329,6 +470,159 @@ async function load() {
 }
 
 load();
+</script>
+
+<script type="module">
+// ---------------------------------------------------------------------
+// PASTE YOUR FIREBASE CONFIG BELOW. See README.md "Setting up the events
+// calendar" section for how to get these values (free, ~5 minutes).
+// ---------------------------------------------------------------------
+const firebaseConfig = {
+  apiKey: "AIzaSyAzZqttv3vC_ME_6Ww0fOtOVuPYg7SCauw",
+  authDomain: "guild-tracker-9ff50.firebaseapp.com",
+  projectId: "guild-tracker-9ff50",
+  storageBucket: "guild-tracker-9ff50.firebasestorage.app",
+  messagingSenderId: "23971271243",
+  appId: "1:23971271243:web:5ba59b4ca23a80b219b3ce"
+};
+
+
+const statusEl = document.getElementById('events-status');
+const nameInput = document.getElementById('rsvp-name');
+const upcomingEl = document.getElementById('upcoming-events');
+const pastEl = document.getElementById('past-events');
+const pastWrap = document.getElementById('past-events-wrap');
+const form = document.getElementById('event-form');
+
+nameInput.value = localStorage.getItem('guildTrackerRsvpName') || '';
+nameInput.addEventListener('change', () => {
+  localStorage.setItem('guildTrackerRsvpName', nameInput.value.trim());
+});
+
+function keyFor(name) {
+  return name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') || 'anon';
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function currentName() {
+  const n = nameInput.value.trim();
+  if (!n) { alert('Enter your RSN in the "RSVPing as" field first.'); }
+  return n;
+}
+
+if (firebaseConfig.apiKey === 'PASTE_ME') {
+  statusEl.textContent = 'Calendar not connected yet — add your Firebase config in index.html (see README).';
+  form.querySelector('button').disabled = true;
+} else {
+  try {
+    const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    const {
+      getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc,
+      query, orderBy, serverTimestamp
+    } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const eventsCol = collection(db, 'events');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('event-title').value.trim();
+      const timeVal = document.getElementById('event-time').value;
+      const notes = document.getElementById('event-notes').value.trim();
+      if (!title || !timeVal) return;
+      await addDoc(eventsCol, {
+        title,
+        notes,
+        startTime: new Date(timeVal).toISOString(),
+        createdAt: serverTimestamp(),
+        rsvps: {}
+      });
+      form.reset();
+    });
+
+    function renderEvent(id, ev) {
+      const rsvps = ev.rsvps || {};
+      const going = [], maybe = [], no = [];
+      Object.values(rsvps).forEach((r) => {
+        if (r.status === 'going') going.push(r.name);
+        else if (r.status === 'maybe') maybe.push(r.name);
+        else if (r.status === 'no') no.push(r.name);
+      });
+      const myKey = keyFor(nameInput.value || '');
+      const myStatus = rsvps[myKey] ? rsvps[myKey].status : null;
+
+      const div = document.createElement('div');
+      div.className = 'event-card';
+      div.innerHTML =
+        '<div class="event-head">' +
+          '<span class="event-title">' + escapeHtml(ev.title) + '</span>' +
+          '<span class="event-time">' + new Date(ev.startTime).toLocaleString([], {weekday:'short', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) + '</span>' +
+        '</div>' +
+        (ev.notes ? '<p class="event-notes">' + escapeHtml(ev.notes) + '</p>' : '') +
+        '<div class="rsvp-row">' +
+          '<button type="button" class="rsvp-btn' + (myStatus==='going'?' active-going':'') + '" data-status="going">Going (' + going.length + ')</button>' +
+          '<button type="button" class="rsvp-btn' + (myStatus==='maybe'?' active-maybe':'') + '" data-status="maybe">Maybe (' + maybe.length + ')</button>' +
+          '<button type="button" class="rsvp-btn' + (myStatus==='no'?' active-no':'') + '" data-status="no">Can\'t go (' + no.length + ')</button>' +
+          '<button type="button" class="delete-event" style="margin-left:auto">remove</button>' +
+        '</div>' +
+        '<div class="rsvp-summary">' +
+          (going.length ? '<span class="going-names">Going: ' + going.map(escapeHtml).join(', ') + '</span><br>' : '') +
+          (maybe.length ? 'Maybe: ' + maybe.map(escapeHtml).join(', ') + '<br>' : '') +
+          (no.length ? 'Can\'t go: ' + no.map(escapeHtml).join(', ') : '') +
+        '</div>';
+
+      div.querySelectorAll('.rsvp-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const name = currentName();
+          if (!name) return;
+          const key = keyFor(name);
+          await updateDoc(doc(db, 'events', id), {
+            ['rsvps.' + key]: { name, status: btn.dataset.status }
+          });
+        });
+      });
+      div.querySelector('.delete-event').addEventListener('click', async () => {
+        if (confirm('Remove "' + ev.title + '"?')) {
+          await deleteDoc(doc(db, 'events', id));
+        }
+      });
+      return div;
+    }
+
+    let latestDocs = [];
+    function renderAll() {
+      const now = Date.now();
+      const upcoming = [];
+      const past = [];
+      latestDocs.forEach(([id, ev]) => {
+        (new Date(ev.startTime).getTime() >= now ? upcoming : past).push([id, ev]);
+      });
+
+      upcomingEl.innerHTML = '';
+      if (upcoming.length === 0) {
+        upcomingEl.innerHTML = '<p class="empty-note">No upcoming events yet — add one above.</p>';
+      } else {
+        upcoming.forEach(([id, ev]) => upcomingEl.appendChild(renderEvent(id, ev)));
+      }
+
+      pastEl.innerHTML = '';
+      past.reverse().forEach(([id, ev]) => pastEl.appendChild(renderEvent(id, ev)));
+      pastWrap.style.display = past.length ? '' : 'none';
+    }
+    nameInput.addEventListener('input', renderAll);
+
+    onSnapshot(query(eventsCol, orderBy('startTime', 'asc')), (snap) => {
+      latestDocs = [];
+      snap.forEach((d) => latestDocs.push([d.id, d.data()]));
+      renderAll();
+      statusEl.textContent = '';
+    });
+  } catch (err) {
+    statusEl.textContent = 'Could not connect to the events calendar (' + err.message + ').';
+  }
+}
 </script>
 </body>
 </html>

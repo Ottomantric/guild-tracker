@@ -401,6 +401,16 @@
   }
   .accept-btn { border-color: var(--green); color: var(--green); }
   .decline-btn { border-color: var(--red); color: var(--red); }
+
+  .member-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .member-actions button {
+    font-size: 0.68rem;
+    padding: 0.28rem 0.55rem;
+  }
+  .role-btn { border-color: var(--gold); color: var(--gold-bright); }
+  .remove-member-btn { border-color: var(--red); color: var(--red); }
+  #tab-admin table { font-size: 0.8rem; }
+  #tab-admin td { vertical-align: top; }
   .join-request-card {
     border: 1px solid var(--panel-border);
     border-radius: 6px;
@@ -497,6 +507,7 @@
     <button class="tab-btn active" data-tab="home">Home</button>
     <button class="tab-btn" data-tab="stats">Player stats</button>
     <button class="tab-btn" data-tab="calendar">Calendar</button>
+    <button class="tab-btn" data-tab="admin" id="admin-tab-btn" style="display:none">Admin</button>
   </nav>
 
   <section class="tab-panel active" id="tab-home">
@@ -529,13 +540,7 @@
 
     <div class="join-panel">
       <h2>Membership</h2>
-      <p class="lead" id="membership-note">New to the guild? Use "Create account" at the top of the page &mdash; your request shows up here for an officer to review.</p>
-      <div class="join-requests" id="admin-pending-wrap" style="display:none">
-        <div class="join-requests-header">
-          <h3>Pending member requests</h3>
-        </div>
-        <div id="join-requests-list"></div>
-      </div>
+      <p class="lead" id="membership-note">New to the guild? Use "Create account" at the top of the page &mdash; your request will be reviewed by an officer.</p>
     </div>
 
   </section>
@@ -589,6 +594,23 @@
 
   </section>
 
+  <section class="tab-panel" id="tab-admin">
+
+    <div class="join-panel">
+      <h2>Pending requests</h2>
+      <div id="join-requests-list"><p class="empty-note">Loading&hellip;</p></div>
+    </div>
+
+    <div class="join-panel">
+      <h2>All members</h2>
+      <table>
+        <thead><tr><th>RSN</th><th>Email</th><th>Status</th><th>Role</th><th></th></tr></thead>
+        <tbody id="all-members-body"></tbody>
+      </table>
+    </div>
+
+  </section>
+
 </div>
 
 <script>
@@ -605,7 +627,7 @@ TAB_BUTTONS.forEach((btn) => {
   });
 });
 const initialTab = (location.hash || '').replace('#', '');
-if (['home', 'stats', 'calendar'].includes(initialTab)) activateTab(initialTab);
+if (['home', 'stats', 'calendar', 'admin'].includes(initialTab)) activateTab(initialTab);
 </script>
 
 <script>
@@ -771,7 +793,6 @@ const rsvpIdentityEl = document.getElementById('rsvp-identity');
 const eventForm = document.getElementById('event-form');
 const eventsStatusEl = document.getElementById('events-status');
 const membershipNoteEl = document.getElementById('membership-note');
-const adminPendingWrap = document.getElementById('admin-pending-wrap');
 const joinListEl = document.getElementById('join-requests-list');
 
 showLoginBtn.addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
@@ -789,7 +810,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const {
       getFirestore, collection, doc, getDoc, setDoc, updateDoc, deleteDoc,
-      addDoc, onSnapshot, query, orderBy, where, serverTimestamp
+      addDoc, onSnapshot, query, orderBy, serverTimestamp
     } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
     const {
       getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -839,17 +860,23 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       if (e.target.id === 'sign-out-btn') signOut(auth);
     });
 
+    const adminTabBtn = document.getElementById('admin-tab-btn');
+    const allMembersBody = document.getElementById('all-members-body');
+
     function setEventControlsEnabled(enabled) {
       eventForm.querySelectorAll('input, button').forEach((el) => { el.disabled = !enabled; });
       document.querySelectorAll('.rsvp-btn').forEach((el) => { el.disabled = !enabled; });
     }
 
     let currentMember = null;
-    let unsubscribePending = null;
+    let unsubscribeMembers = null;
 
     onAuthStateChanged(auth, async (user) => {
-      if (unsubscribePending) { unsubscribePending(); unsubscribePending = null; }
-      adminPendingWrap.style.display = 'none';
+      if (unsubscribeMembers) { unsubscribeMembers(); unsubscribeMembers = null; }
+      adminTabBtn.style.display = 'none';
+      if (document.getElementById('tab-admin').classList.contains('active')) {
+        activateTab('home');
+      }
 
       if (!user) {
         currentMember = null;
@@ -861,7 +888,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         document.getElementById('show-login-btn').addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
         document.getElementById('show-signup-btn').addEventListener('click', () => { loginForm.style.display = 'none'; signupForm.style.display = 'flex'; });
         rsvpIdentityEl.textContent = 'Sign in to RSVP.';
-        membershipNoteEl.textContent = 'New to the guild? Use "Create account" at the top of the page — your request shows up here for an officer to review.';
+        membershipNoteEl.textContent = 'New to the guild? Use "Create account" at the top of the page — your request will be reviewed by an officer.';
         setEventControlsEnabled(false);
         renderAll();
         return;
@@ -910,43 +937,84 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       }
 
       if (currentMember.role === 'admin') {
-        adminPendingWrap.style.display = '';
+        adminTabBtn.style.display = '';
         joinListEl.innerHTML = '<p class="empty-note">Loading&hellip;</p>';
-        unsubscribePending = onSnapshot(
-          query(membersCol, where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
+        allMembersBody.innerHTML = '<tr><td colspan="5" class="empty-note">Loading&hellip;</td></tr>';
+
+        unsubscribeMembers = onSnapshot(
+          query(membersCol, orderBy('createdAt', 'desc')),
           (snap) => {
-            if (snap.empty) {
+            const all = [];
+            snap.forEach((d) => all.push({ id: d.id, ...d.data() }));
+
+            const pending = all.filter((m) => m.status === 'pending');
+            if (pending.length === 0) {
               joinListEl.innerHTML = '<p class="empty-note">No pending requests.</p>';
-              return;
-            }
-            joinListEl.innerHTML = '';
-            snap.forEach((d) => {
-              const r = d.data();
-              const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
-              const div = document.createElement('div');
-              div.className = 'join-request-card';
-              div.innerHTML =
-                '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
-                '<div class="contact">' + escapeHtml(r.email) + '</div>' +
-                (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
-                '<div class="request-actions">' +
-                  '<button type="button" class="accept-btn">Approve</button>' +
-                  '<button type="button" class="decline-btn">Decline</button>' +
-                '</div>';
-              div.querySelector('.accept-btn').addEventListener('click', async () => {
-                await updateDoc(doc(db, 'members', d.id), { status: 'approved' });
-                alert(r.rsn + ' approved. Remember to add them to players.json to start tracking their stats.');
+            } else {
+              joinListEl.innerHTML = '';
+              pending.forEach((r) => {
+                const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
+                const div = document.createElement('div');
+                div.className = 'join-request-card';
+                div.innerHTML =
+                  '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
+                  '<div class="contact">' + escapeHtml(r.email) + '</div>' +
+                  (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
+                  '<div class="request-actions">' +
+                    '<button type="button" class="accept-btn">Approve</button>' +
+                    '<button type="button" class="decline-btn">Decline</button>' +
+                  '</div>';
+                div.querySelector('.accept-btn').addEventListener('click', async () => {
+                  await updateDoc(doc(db, 'members', r.id), { status: 'approved' });
+                  alert(r.rsn + ' approved. Remember to add them to players.json to start tracking their stats.');
+                });
+                div.querySelector('.decline-btn').addEventListener('click', async () => {
+                  if (confirm('Decline the request from ' + r.rsn + '?')) {
+                    await updateDoc(doc(db, 'members', r.id), { status: 'declined' });
+                  }
+                });
+                joinListEl.appendChild(div);
               });
-              div.querySelector('.decline-btn').addEventListener('click', async () => {
-                if (confirm('Decline the request from ' + r.rsn + '?')) {
-                  await updateDoc(doc(db, 'members', d.id), { status: 'declined' });
+            }
+
+            allMembersBody.innerHTML = '';
+            all.forEach((m) => {
+              const isSelf = m.id === currentMember.uid;
+              const isAdminRole = m.role === 'admin';
+              const tr = document.createElement('tr');
+              tr.innerHTML =
+                '<td>' + escapeHtml(m.rsn) + (isSelf ? ' (you)' : '') + '</td>' +
+                '<td>' + escapeHtml(m.email) + '</td>' +
+                '<td>' + escapeHtml(m.status) + '</td>' +
+                '<td>' + escapeHtml(m.role) + '</td>' +
+                '<td><div class="member-actions">' +
+                  (m.status !== 'approved' ? '<button type="button" class="accept-btn status-approve">Approve</button>' : '') +
+                  (m.status !== 'declined' ? '<button type="button" class="decline-btn status-decline">Decline</button>' : '') +
+                  '<button type="button" class="role-btn toggle-role">' + (isAdminRole ? 'Remove admin' : 'Make admin') + '</button>' +
+                  (isSelf ? '' : '<button type="button" class="remove-member-btn">Remove</button>') +
+                '</div></td>';
+              tr.querySelector('.status-approve')?.addEventListener('click', async () => {
+                await updateDoc(doc(db, 'members', m.id), { status: 'approved' });
+              });
+              tr.querySelector('.status-decline')?.addEventListener('click', async () => {
+                if (confirm('Decline ' + m.rsn + '?')) await updateDoc(doc(db, 'members', m.id), { status: 'declined' });
+              });
+              tr.querySelector('.toggle-role').addEventListener('click', async () => {
+                const newRole = isAdminRole ? 'member' : 'admin';
+                if (isSelf && isAdminRole && !confirm('Remove your own admin access?')) return;
+                await updateDoc(doc(db, 'members', m.id), { role: newRole });
+              });
+              tr.querySelector('.remove-member-btn')?.addEventListener('click', async () => {
+                if (confirm('Remove ' + m.rsn + '\'s membership record? Their login stays active but they lose site access unless they sign up again.')) {
+                  await deleteDoc(doc(db, 'members', m.id));
                 }
               });
-              joinListEl.appendChild(div);
+              allMembersBody.appendChild(tr);
             });
           },
           (err) => {
             joinListEl.innerHTML = '<p class="empty-note">Could not load requests (' + err.message + ').</p>';
+            allMembersBody.innerHTML = '<tr><td colspan="5" class="empty-note">Could not load members (' + escapeHtml(err.message) + ').</td></tr>';
           }
         );
       }

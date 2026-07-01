@@ -1,5 +1,9 @@
 import fs from 'fs/promises';
 
+// Matches the projectId in index.html's firebaseConfig — update if you ever
+// switch Firebase projects.
+const FIREBASE_PROJECT_ID = 'guild-tracker-9ff50';
+
 const SKILL_ORDER = [
   "Overall", "Attack", "Defence", "Strength", "Constitution", "Ranged", "Prayer", "Magic",
   "Cooking", "Woodcutting", "Fletching", "Fishing", "Firemaking", "Crafting", "Smithing",
@@ -13,6 +17,24 @@ const PLAYERS_PATH = new URL('../players.json', import.meta.url);
 
 // Keep roughly 100 days of history at a 4x/day snapshot rate before trimming old entries.
 const MAX_SNAPSHOTS = 400;
+
+// Reads the publicly-readable `publicRoster/roster` Firestore document —
+// no API key or auth needed since the security rules mark it public-read.
+// Returns [] on any failure so a Firestore hiccup never blocks the whole run.
+async function fetchApprovedRoster() {
+  const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents/publicRoster/roster`;
+  try {
+    const res = await fetch(url);
+    if (res.status === 404) return []; // no one approved yet, or doc not created
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const values = data.fields?.rsns?.arrayValue?.values || [];
+    return values.map((v) => v.stringValue).filter(Boolean);
+  } catch (err) {
+    console.error(`could not fetch approved-member roster from Firestore: ${err.message}`);
+    return [];
+  }
+}
 
 async function fetchPlayerStats(name) {
   const url = `https://secure.runescape.com/m=hiscore/index_lite.ws?player=${encodeURIComponent(name)}`;
@@ -38,7 +60,10 @@ async function fetchPlayerStats(name) {
 }
 
 async function main() {
-  const players = JSON.parse(await fs.readFile(PLAYERS_PATH, 'utf-8'));
+  const manualPlayers = JSON.parse(await fs.readFile(PLAYERS_PATH, 'utf-8'));
+  const rosterPlayers = await fetchApprovedRoster();
+  const players = Array.from(new Set([...manualPlayers, ...rosterPlayers]));
+  console.log(`tracking ${players.length} player(s): ${manualPlayers.length} from players.json, ${rosterPlayers.length} from approved site members`);
 
   let history = [];
   try {

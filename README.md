@@ -61,12 +61,13 @@ set to every 2 hours (`0 */2 * * *`). GitHub Actions cron schedules can drift
 by a few minutes and are disabled automatically on repos with no activity for
 60 days — pushing any commit re-enables it.
 
-## Setting up the events calendar
+## Setting up member accounts and the events calendar
 
-The stats dashboard is read-only, so it works fine off a plain JSON file. RSVPs
-need to be writable by anyone visiting the page, in real time — a static site
-can't do that alone, so the calendar uses Firebase Firestore, a free database
-you talk to directly from the page (no server of your own to run).
+The stats dashboard is read-only, so it works fine off a plain JSON file.
+RSVPing and adding events need to be restricted to approved guild members, and
+someone needs a way to review new sign-ups — a static site can't do any of
+that alone, so this uses Firebase (a free backend you talk to directly from
+the page; no server of your own to run).
 
 1. Go to [console.firebase.google.com](https://console.firebase.google.com),
    sign in with any Google account, and click "Create a project." Give it any
@@ -92,74 +93,98 @@ you talk to directly from the page (no server of your own to run).
 4. Open `index.html` in this repo, find the `firebaseConfig` object near the
    bottom (search for `PASTE_ME`), and replace it with your actual values.
    Commit the change.
-5. Back in Firebase, go to **Firestore Database -> Rules** and replace the
-   default rules with:
+5. Go to **Build -> Authentication** (use the "Search for products" box at
+   the top of the sidebar if it's not listed yet — it only appears once
+   you've opened it the first time). Click **Get started**, go to the
+   **Sign-in method** tab, and enable **Email/Password**.
+6. Go to **Firestore Database -> Rules** and replace the default rules with:
 
    ```
    rules_version = '2';
    service cloud.firestore {
      match /databases/{database}/documents {
-       match /events/{eventId} {
-         allow read, write: if true;
+
+       function signedIn() { return request.auth != null; }
+       function memberDoc() {
+         return get(/databases/$(database)/documents/members/$(request.auth.uid));
        }
-       match /joinRequests/{requestId} {
-         allow create: if true;
-         allow read, update, delete: if request.auth != null &&
-           request.auth.token.email in [
-             'you@gmail.com',
-             'friend2@gmail.com'
-           ];
+       function isApproved() { return signedIn() && memberDoc().data.status == 'approved'; }
+       function isAdmin() { return signedIn() && memberDoc().data.role == 'admin'; }
+
+       match /members/{uid} {
+         allow create: if signedIn() && request.auth.uid == uid
+           && request.resource.data.status == 'pending'
+           && request.resource.data.role == 'member';
+         allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+         allow update, delete: if isAdmin();
+       }
+
+       match /events/{eventId} {
+         allow read: if true;
+         allow create, update, delete: if isApproved();
        }
      }
    }
    ```
 
-   Replace the email list with the Google accounts of everyone who should be
-   able to review join requests. Anyone can *submit* a request (that's the
-   `allow create: if true` line), but only signed-in admins on that list can
-   *read, update, or decide on* them — this is enforced by Firestore itself,
-   not just hidden in the page, so it can't be bypassed from the browser.
+   A few things this setup is doing on purpose:
+   - Anyone can create their own `members` document (that's what happens
+     automatically when someone signs up), but the rule forces new accounts
+     to start as `status: 'pending'` and `role: 'member'` — a signed-up user
+     cannot write their own account in as already-approved or as an admin,
+     even by tampering with the page's JavaScript, because Firestore itself
+     rejects the write.
+   - Only an admin can change `status` or `role` afterward (that's the
+     Approve/Decline buttons on the Home tab).
+   - Events are publicly readable (anyone can see the calendar) but only
+     approved members can create events or RSVP.
 
-   Events are left fully open (no login needed) since RSVPs aren't sensitive
-   — only join requests are gated.
+7. **Bootstrap your own admin account** (one-time, manual):
+   - Visit your Pages site and use "Create account" to sign up normally —
+     you'll land in `pending` status like anyone else.
+   - In Firebase, go to **Firestore Database -> Data**, open the `members`
+     collection, and click the document with your `uid` (match it by the
+     `email` field).
+   - Edit two fields on that document: set `status` to `approved` and `role`
+     to `admin`. Save.
+   - Refresh the site and sign in again — you should see "(admin)" next to
+     your name and a "Pending member requests" list on the Home tab.
+   - From here on, approving everyone else is just clicking "Approve" in
+     that list — no more manual Firestore editing needed, except to promote
+     additional admins the same way you bootstrapped yourself.
 
-6. Go to **Build -> Authentication -> Sign-in method** and enable **Google**
-   as a sign-in provider (it'll ask for a support email — use your own).
-
-7. Refresh your GitHub Pages site. The "Calendar not connected yet" message
-   should disappear, and you should be able to add an event and RSVP.
+8. Refresh your GitHub Pages site. The "Accounts not connected yet" message
+   should disappear.
 
 ## Managing admins
 
-The list of who can view and act on join requests lives directly in the
-Firestore rule you pasted above (step 5) — there's no admin panel for this.
-To add or remove an admin, edit that email list in **Firestore Database ->
-Rules**, adding or removing the Google account email, and click **Publish**.
-Changes take effect within a minute or two.
+To make someone else an admin, open their document under **Firestore
+Database -> Data -> members** and set `role` to `admin` (they still need
+`status: approved` too, which they'll already have if you approved their
+sign-up). To remove admin access, change `role` back to `member`.
 
-An admin signs in by clicking "Sign in as admin" on the Home tab and
-authenticating with their Google account. If their email isn't on the list,
-they'll be able to sign in, but the requests list will show a "not
-authorized" message rather than any data — the sign-in itself doesn't grant
-access, only being on the list does.
-
-Each person types their RSN once into the "RSVPing as" field — it's
-remembered in their own browser for next time, and used to tag their RSVP.
+Approving or declining a sign-up doesn't touch their login (that's a separate
+Firebase Authentication record) — it only controls what they can do on the
+site. If you want to fully remove someone's ability to even sign in again,
+that's in **Authentication -> Users**, where you can disable or delete the
+account.
 
 ## Notes
 
 - The page now has three tabs: **Home** (about blurb, total-level leaderboard,
-  join-request form), **Player stats** (the weekly XP dashboard), and
-  **Calendar** (events/RSVP). Switching tabs updates the URL hash
-  (`#home`, `#stats`, `#calendar`) so you can link directly to one.
+  account sign-up and membership status), **Player stats** (the weekly XP
+  dashboard), and **Calendar** (events/RSVP). Switching tabs updates the URL
+  hash (`#home`, `#stats`, `#calendar`) so you can link directly to one.
 - The "About the guild" text on the Home tab is placeholder copy — edit the
   `<div class="about-panel">` block in `index.html` to describe your actual
   guild.
-- Join requests submitted on the Home tab are only visible to signed-in
-  admins on the allowlist (see "Managing admins" above). Admins see "Accept"
-  and "Decline" on each request — both just mark it as handled and remove it
-  from the pending list; neither one automatically adds anyone to
-  `players.json`, so remember to do that yourself after accepting someone.
+- Anyone can create an account, but new accounts start `pending` and can't
+  RSVP or add events until an admin approves them on the Home tab (see
+  "Setting up member accounts" above). Viewing stats and the calendar stays
+  public either way — no login needed just to look.
+- Approving or declining a sign-up doesn't automatically touch
+  `players.json` — you still add their RSN there yourself if you want their
+  stats tracked.
 - History is capped at 400 snapshots in `scripts/fetch-stats.js` (roughly
   100 days at a 4x/day cadence) to keep the file small. Raise `MAX_SNAPSHOTS`
   if you want to keep more.

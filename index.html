@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Guild Tracker</title>
+<style>
+  :root {
+    --bg: #14110d;
+    --panel: #1e1a14;
+    --panel-border: #3a3122;
+    --gold: #c9a24d;
+    --gold-bright: #e8c977;
+    --parchment: #e8dcc0;
+    --muted: #9c937c;
+    --red: #a85c4a;
+    --green: #7ea36a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--parchment);
+    font-family: Georgia, 'Times New Roman', serif;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  header {
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 1.25rem;
+    margin-bottom: 2rem;
+  }
+  h1 {
+    font-size: 1.9rem;
+    margin: 0 0 0.25rem;
+    color: var(--gold-bright);
+    font-weight: normal;
+  }
+  .subtitle { color: var(--muted); font-size: 0.9rem; margin: 0; }
+  .status-line {
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 1.5rem;
+  }
+  .status-line.error { color: var(--red); }
+
+  .leaderboard {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.4rem;
+    margin-bottom: 2rem;
+  }
+  .leaderboard h2 {
+    margin: 0 0 1rem;
+    font-size: 1.1rem;
+    color: var(--gold-bright);
+    font-weight: normal;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+  }
+  th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: normal;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--panel-border);
+    text-transform: uppercase;
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+  }
+  th.num, td.num { text-align: right; }
+  td { padding: 0.32rem 0.5rem; border-bottom: 1px solid #2a2418; }
+  .gain-bar-track {
+    display: inline-block;
+    width: 90px;
+    height: 8px;
+    background: #2a2418;
+    border-radius: 4px;
+    vertical-align: middle;
+    margin-right: 8px;
+    overflow: hidden;
+  }
+  .gain-bar-fill {
+    display: block;
+    height: 100%;
+    background: var(--gold);
+  }
+  .gain-cell { display: flex; align-items: center; justify-content: flex-end; }
+
+  .roster {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: 1.25rem;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 1.25rem 1.4rem 1.4rem;
+  }
+  .card h2 {
+    margin: 0 0 0.9rem;
+    font-size: 1.25rem;
+    font-weight: normal;
+    color: var(--gold-bright);
+  }
+  .totals {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    font-family: 'Courier New', monospace;
+  }
+  .totals div { flex: 1; }
+  .totals .num { font-size: 1.25rem; color: var(--parchment); display: block; }
+  .totals .label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  tr.maxed td.lvl { color: var(--gold-bright); }
+  tr.unranked td { color: var(--muted); }
+  .gain-pos { color: var(--green); }
+  .card-note, .disclaimer {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    line-height: 1.6;
+  }
+  .disclaimer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--panel-border);
+    font-family: Georgia, serif;
+  }
+  .disclaimer strong { color: var(--parchment); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Guild Tracker</h1>
+    <p class="subtitle">Auto-updated every 6 hours via GitHub Actions</p>
+  </header>
+
+  <div class="status-line" id="status">Loading history&hellip;</div>
+
+  <div class="leaderboard" id="leaderboard" style="display:none">
+    <h2>XP gained &mdash; last 7 days</h2>
+    <table>
+      <thead><tr><th>Player</th><th class="num">XP this week</th><th class="num">Total level</th><th class="num">Total XP</th></tr></thead>
+      <tbody id="leaderboard-body"></tbody>
+    </table>
+  </div>
+
+  <div class="roster" id="roster"></div>
+
+  <div class="disclaimer">
+    <strong>How this works.</strong> A GitHub Actions workflow fetches everyone's RS3
+    hiscores directly from Jagex every 6 hours and appends a snapshot to
+    <code>data/history.json</code> in this repo. This page reads that file directly, so
+    there's no CORS proxy in the loop at all &mdash; that fragility from the earlier
+    prototype is gone. Weekly XP is the difference between the most recent snapshot and
+    the snapshot closest to 7 days before it, so figures firm up as more history
+    accumulates.
+  </div>
+
+</div>
+
+<script>
+const SKILL_ORDER = [
+  "Overall","Attack","Defence","Strength","Constitution","Ranged","Prayer","Magic",
+  "Cooking","Woodcutting","Fletching","Fishing","Firemaking","Crafting","Smithing",
+  "Mining","Herblore","Agility","Thieving","Slayer","Farming","Runecrafting",
+  "Hunter","Construction","Summoning","Dungeoneering","Divination","Invention",
+  "Archaeology","Necromancy"
+];
+const MAX_LEVEL = { "Invention": 150 };
+
+function fmt(n) {
+  if (n === undefined || n === null || n === -1 || isNaN(n)) return '&mdash;';
+  return n.toLocaleString();
+}
+function fmtSigned(n) {
+  if (n === undefined || n === null || isNaN(n)) return '&mdash;';
+  return (n > 0 ? '+' : '') + n.toLocaleString();
+}
+
+function findBaselineSnapshot(history, latestTimestamp) {
+  const targetTime = new Date(latestTimestamp).getTime() - 7 * 24 * 60 * 60 * 1000;
+  let best = null;
+  for (const snap of history) {
+    const t = new Date(snap.timestamp).getTime();
+    if (t <= targetTime) {
+      if (!best || t > new Date(best.timestamp).getTime()) best = snap;
+    }
+  }
+  return best || history[0];
+}
+
+async function load() {
+  const statusEl = document.getElementById('status');
+  let history;
+  try {
+    const res = await fetch('data/history.json?_=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    history = await res.json();
+  } catch (e) {
+    statusEl.textContent = 'Could not load data/history.json (' + e.message + '). Has the "Update guild stats" workflow run yet?';
+    statusEl.className = 'status-line error';
+    return;
+  }
+
+  if (!history || history.length === 0) {
+    statusEl.textContent = 'No snapshots yet. Trigger the "Update guild stats" workflow manually in the Actions tab to get started.';
+    statusEl.className = 'status-line error';
+    return;
+  }
+
+  const latest = history[history.length - 1];
+  const baseline = findBaselineSnapshot(history, latest.timestamp);
+  const isPartialWeek = baseline === latest || history.length < 2;
+
+  statusEl.textContent = 'Latest snapshot: ' + new Date(latest.timestamp).toLocaleString() +
+    (isPartialWeek ? ' (less than a week of history so far — weekly figures will fill in over time)' : '');
+  statusEl.className = 'status-line';
+
+  const names = Object.keys(latest.players);
+  const weeklyGains = {};
+  let maxGain = 1;
+  names.forEach((name) => {
+    const cur = latest.players[name]?.Overall?.xp ?? 0;
+    const base = baseline.players[name]?.Overall?.xp ?? cur;
+    const gain = Math.max(0, cur - base);
+    weeklyGains[name] = gain;
+    if (gain > maxGain) maxGain = gain;
+  });
+
+  const sorted = [...names].sort((a, b) => weeklyGains[b] - weeklyGains[a]);
+  const lbBody = document.getElementById('leaderboard-body');
+  lbBody.innerHTML = sorted.map((name) => {
+    const gain = weeklyGains[name];
+    const pct = Math.round((gain / maxGain) * 100);
+    const overall = latest.players[name].Overall;
+    return '<tr><td>' + name + '</td>' +
+      '<td class="num"><div class="gain-cell"><span class="gain-bar-track"><span class="gain-bar-fill" style="width:' + pct + '%"></span></span>' + fmt(gain) + '</div></td>' +
+      '<td class="num">' + fmt(overall.level) + '</td>' +
+      '<td class="num">' + fmt(overall.xp) + '</td></tr>';
+  }).join('');
+  document.getElementById('leaderboard').style.display = '';
+
+  const rosterEl = document.getElementById('roster');
+  rosterEl.innerHTML = names.map((name) => {
+    const skills = latest.players[name];
+    const baseSkills = baseline.players[name] || {};
+    const overall = skills.Overall;
+    const rows = SKILL_ORDER.slice(1).filter((s) => skills[s]).map((s) => {
+      const cur = skills[s];
+      const base = baseSkills[s];
+      const gained = base ? Math.max(0, (cur.xp || 0) - (base.xp || 0)) : 0;
+      const maxed = MAX_LEVEL[s] ? cur.level >= MAX_LEVEL[s] : cur.level === 99;
+      const unranked = cur.rank === -1;
+      return '<tr class="' + (maxed ? 'maxed' : '') + (unranked ? ' unranked' : '') + '">' +
+        '<td>' + s + '</td>' +
+        '<td class="num lvl">' + fmt(cur.level) + '</td>' +
+        '<td class="num">' + fmt(cur.xp) + '</td>' +
+        '<td class="num ' + (gained > 0 ? 'gain-pos' : '') + '">' + (gained > 0 ? fmtSigned(gained) : '&mdash;') + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<div class="card"><h2>' + name + '</h2>' +
+      '<div class="totals">' +
+        '<div><span class="num">' + fmt(overall.level) + '</span><span class="label">Total level</span></div>' +
+        '<div><span class="num">' + fmt(overall.xp) + '</span><span class="label">Total XP</span></div>' +
+        '<div><span class="num">' + fmtSigned(weeklyGains[name]) + '</span><span class="label">XP this week</span></div>' +
+      '</div>' +
+      '<table><thead><tr><th>Skill</th><th class="num">Level</th><th class="num">XP</th><th class="num">7-day gain</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></div>';
+  }).join('');
+}
+
+load();
+</script>
+</body>
+</html>

@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <title>Guild Tracker</title>
+<link rel="icon" type="image/png" href="guild-icon.png">
+<link rel="apple-touch-icon" href="guild-icon.png">
 <style>
   :root {
     --bg: #14110d;
@@ -29,9 +31,20 @@
     padding-bottom: 1.25rem;
     margin-bottom: 2rem;
   }
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    margin-bottom: 0.25rem;
+  }
+  .brand-icon {
+    height: 2.4rem;
+    width: auto;
+    display: block;
+  }
   h1 {
     font-size: 1.9rem;
-    margin: 0 0 0.25rem;
+    margin: 0;
     color: var(--gold-bright);
     font-weight: normal;
   }
@@ -501,7 +514,10 @@
 <div class="wrap">
 
   <header>
-    <h1>Guild Tracker</h1>
+    <div class="brand-row">
+      <img src="guild-icon.png" alt="" class="brand-icon">
+      <h1>Guild Tracker</h1>
+    </div>
     <p class="subtitle">Auto-updated every 2 hours via GitHub Actions</p>
   </header>
 

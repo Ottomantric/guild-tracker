@@ -380,6 +380,27 @@
     letter-spacing: 0.05em;
     font-weight: normal;
   }
+  .join-requests-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.8rem;
+  }
+  .join-requests-header h3 { margin: 0; }
+  .admin-auth-btn {
+    font-size: 0.7rem;
+    padding: 0.35rem 0.7rem;
+    color: var(--muted);
+    border-color: var(--panel-border);
+  }
+  .admin-auth-btn.signed-in { color: var(--green); border-color: var(--green); }
+  .request-actions { display: flex; gap: 0.5rem; margin-top: 0.4rem; }
+  .request-actions button {
+    font-size: 0.72rem;
+    padding: 0.3rem 0.6rem;
+  }
+  .accept-btn { border-color: var(--green); color: var(--green); }
+  .decline-btn { border-color: var(--red); color: var(--red); }
   .join-request-card {
     border: 1px solid var(--panel-border);
     border-radius: 6px;
@@ -461,8 +482,11 @@
         <button type="submit">Send request</button>
       </form>
       <div class="join-requests">
-        <h3>Pending requests</h3>
-        <div id="join-requests-list"><p class="empty-note">Loading&hellip;</p></div>
+        <div class="join-requests-header">
+          <h3>Pending requests</h3>
+          <button type="button" id="admin-auth-btn" class="admin-auth-btn">Sign in as admin</button>
+        </div>
+        <div id="join-requests-list"><p class="empty-note">Sign in as an admin to view and manage requests.</p></div>
       </div>
     </div>
 
@@ -717,16 +741,22 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
     const {
       getFirestore, collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc,
-      query, orderBy, serverTimestamp
+      query, orderBy, where, serverTimestamp
     } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    const {
+      getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged
+    } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    const googleProvider = new GoogleAuthProvider();
     const eventsCol = collection(db, 'events');
     const joinCol = collection(db, 'joinRequests');
 
     const joinForm = document.getElementById('join-form');
     const joinListEl = document.getElementById('join-requests-list');
+    const authBtn = document.getElementById('admin-auth-btn');
 
     joinForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -734,34 +764,79 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       const contact = document.getElementById('join-contact').value.trim();
       const message = document.getElementById('join-message').value.trim();
       if (!rsn) return;
-      await addDoc(joinCol, { rsn, contact, message, createdAt: serverTimestamp() });
-      joinForm.reset();
-      alert('Request sent. Someone from the guild will reach out.');
+      try {
+        await addDoc(joinCol, { rsn, contact, message, status: 'pending', createdAt: serverTimestamp() });
+        joinForm.reset();
+        alert('Request sent. Someone from the guild will reach out.');
+      } catch (err) {
+        alert('Could not send request: ' + err.message);
+      }
     });
 
-    onSnapshot(query(joinCol, orderBy('createdAt', 'desc')), (snap) => {
-      if (snap.empty) {
-        joinListEl.innerHTML = '<p class="empty-note">No pending requests.</p>';
+    authBtn.addEventListener('click', async () => {
+      if (auth.currentUser) {
+        await signOut(auth);
+      } else {
+        try {
+          await signInWithPopup(auth, googleProvider);
+        } catch (err) {
+          alert('Sign-in failed: ' + err.message);
+        }
+      }
+    });
+
+    let unsubscribeRequests = null;
+    onAuthStateChanged(auth, (user) => {
+      if (unsubscribeRequests) { unsubscribeRequests(); unsubscribeRequests = null; }
+
+      if (!user) {
+        authBtn.textContent = 'Sign in as admin';
+        authBtn.classList.remove('signed-in');
+        joinListEl.innerHTML = '<p class="empty-note">Sign in as an admin to view and manage requests.</p>';
         return;
       }
-      joinListEl.innerHTML = '';
-      snap.forEach((d) => {
-        const r = d.data();
-        const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
-        const div = document.createElement('div');
-        div.className = 'join-request-card';
-        div.innerHTML =
-          '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
-          (r.contact ? '<div class="contact">' + escapeHtml(r.contact) + '</div>' : '') +
-          (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
-          '<button type="button" class="delete-event dismiss-request">dismiss</button>';
-        div.querySelector('.dismiss-request').addEventListener('click', async () => {
-          if (confirm('Dismiss this request from ' + r.rsn + '?')) {
-            await deleteDoc(doc(db, 'joinRequests', d.id));
+
+      authBtn.textContent = 'Sign out (' + user.email + ')';
+      authBtn.classList.add('signed-in');
+      joinListEl.innerHTML = '<p class="empty-note">Loading&hellip;</p>';
+
+      unsubscribeRequests = onSnapshot(
+        query(joinCol, where('status', '==', 'pending'), orderBy('createdAt', 'desc')),
+        (snap) => {
+          if (snap.empty) {
+            joinListEl.innerHTML = '<p class="empty-note">No pending requests.</p>';
+            return;
           }
-        });
-        joinListEl.appendChild(div);
-      });
+          joinListEl.innerHTML = '';
+          snap.forEach((d) => {
+            const r = d.data();
+            const when = r.createdAt ? r.createdAt.toDate().toLocaleDateString() : '';
+            const div = document.createElement('div');
+            div.className = 'join-request-card';
+            div.innerHTML =
+              '<div class="join-request-head"><span class="rsn">' + escapeHtml(r.rsn) + '</span><span class="when">' + when + '</span></div>' +
+              (r.contact ? '<div class="contact">' + escapeHtml(r.contact) + '</div>' : '') +
+              (r.message ? '<div class="message">' + escapeHtml(r.message) + '</div>' : '') +
+              '<div class="request-actions">' +
+                '<button type="button" class="accept-btn">Accept</button>' +
+                '<button type="button" class="decline-btn">Decline</button>' +
+              '</div>';
+            div.querySelector('.accept-btn').addEventListener('click', async () => {
+              await updateDoc(doc(db, 'joinRequests', d.id), { status: 'accepted' });
+              alert(r.rsn + ' marked as accepted. Remember to add them to players.json to start tracking their stats.');
+            });
+            div.querySelector('.decline-btn').addEventListener('click', async () => {
+              if (confirm('Decline the request from ' + r.rsn + '?')) {
+                await updateDoc(doc(db, 'joinRequests', d.id), { status: 'declined' });
+              }
+            });
+            joinListEl.appendChild(div);
+          });
+        },
+        (err) => {
+          joinListEl.innerHTML = '<p class="empty-note">Not authorized to view requests (' + err.message + ').</p>';
+        }
+      );
     });
 
     form.addEventListener('submit', async (e) => {

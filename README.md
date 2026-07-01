@@ -57,7 +57,7 @@ scheduled run — or a manually triggered one — will pick it up.
 ## Changing how often it updates
 
 Edit the `cron` line in `.github/workflows/update-stats.yml`. It's currently
-set to every 6 hours (`0 */6 * * *`). GitHub Actions cron schedules can drift
+set to every 2 hours (`0 */2 * * *`). GitHub Actions cron schedules can drift
 by a few minutes and are disabled automatically on repos with no activity for
 60 days — pushing any commit re-enables it.
 
@@ -102,24 +102,64 @@ you talk to directly from the page (no server of your own to run).
        match /events/{eventId} {
          allow read, write: if true;
        }
+       match /joinRequests/{requestId} {
+         allow create: if true;
+         allow read, update, delete: if request.auth != null &&
+           request.auth.token.email in [
+             'you@gmail.com',
+             'friend2@gmail.com'
+           ];
+       }
      }
    }
    ```
 
-   This scopes open access to only the `events` collection (not your whole
-   Firebase project) but doesn't require login — anyone with your Pages URL
-   can add, RSVP to, or delete events. That's a reasonable trade-off for a
-   small private guild page; it wouldn't be appropriate for anything public
-   or sensitive.
+   Replace the email list with the Google accounts of everyone who should be
+   able to review join requests. Anyone can *submit* a request (that's the
+   `allow create: if true` line), but only signed-in admins on that list can
+   *read, update, or decide on* them — this is enforced by Firestore itself,
+   not just hidden in the page, so it can't be bypassed from the browser.
 
-6. Refresh your GitHub Pages site. The "Calendar not connected yet" message
+   Events are left fully open (no login needed) since RSVPs aren't sensitive
+   — only join requests are gated.
+
+6. Go to **Build -> Authentication -> Sign-in method** and enable **Google**
+   as a sign-in provider (it'll ask for a support email — use your own).
+
+7. Refresh your GitHub Pages site. The "Calendar not connected yet" message
    should disappear, and you should be able to add an event and RSVP.
+
+## Managing admins
+
+The list of who can view and act on join requests lives directly in the
+Firestore rule you pasted above (step 5) — there's no admin panel for this.
+To add or remove an admin, edit that email list in **Firestore Database ->
+Rules**, adding or removing the Google account email, and click **Publish**.
+Changes take effect within a minute or two.
+
+An admin signs in by clicking "Sign in as admin" on the Home tab and
+authenticating with their Google account. If their email isn't on the list,
+they'll be able to sign in, but the requests list will show a "not
+authorized" message rather than any data — the sign-in itself doesn't grant
+access, only being on the list does.
 
 Each person types their RSN once into the "RSVPing as" field — it's
 remembered in their own browser for next time, and used to tag their RSVP.
 
 ## Notes
 
+- The page now has three tabs: **Home** (about blurb, total-level leaderboard,
+  join-request form), **Player stats** (the weekly XP dashboard), and
+  **Calendar** (events/RSVP). Switching tabs updates the URL hash
+  (`#home`, `#stats`, `#calendar`) so you can link directly to one.
+- The "About the guild" text on the Home tab is placeholder copy — edit the
+  `<div class="about-panel">` block in `index.html` to describe your actual
+  guild.
+- Join requests submitted on the Home tab are only visible to signed-in
+  admins on the allowlist (see "Managing admins" above). Admins see "Accept"
+  and "Decline" on each request — both just mark it as handled and remove it
+  from the pending list; neither one automatically adds anyone to
+  `players.json`, so remember to do that yourself after accepting someone.
 - History is capped at 400 snapshots in `scripts/fetch-stats.js` (roughly
   100 days at a 4x/day cadence) to keep the file small. Raise `MAX_SNAPSHOTS`
   if you want to keep more.

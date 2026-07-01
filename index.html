@@ -93,21 +93,61 @@
   .gain-cell { display: flex; align-items: center; justify-content: flex-end; }
 
   .roster {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-    gap: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
   }
   .card {
     background: var(--panel);
     border: 1px solid var(--panel-border);
     border-radius: 6px;
-    padding: 1.25rem 1.4rem 1.4rem;
+    padding: 0;
   }
-  .card h2 {
-    margin: 0 0 0.9rem;
-    font-size: 1.25rem;
-    font-weight: normal;
+  .card summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: 0.9rem 1.4rem;
+  }
+  .card summary::-webkit-details-marker { display: none; }
+  .card summary .chevron {
+    margin-left: auto;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+    transition: transform 0.15s ease;
+    flex: 0 0 auto;
+  }
+  .card[open] summary .chevron { transform: rotate(90deg); }
+  .card summary .player-name {
+    font-size: 1.1rem;
     color: var(--gold-bright);
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .card summary .summary-stat {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    text-align: right;
+    flex: 0 0 auto;
+    min-width: 90px;
+  }
+  .card summary .summary-stat .label {
+    display: block;
+    font-size: 0.63rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .card-body {
+    padding: 0 1.4rem 1.25rem;
+    border-top: 1px solid var(--panel-border);
+    margin-top: 0.1rem;
+    padding-top: 1rem;
   }
   .totals {
     display: flex;
@@ -141,7 +181,7 @@
 
   <header>
     <h1>Guild Tracker</h1>
-    <p class="subtitle">Auto-updated every 2 hours via GitHub Actions</p>
+    <p class="subtitle">Auto-updated every 6 hours via GitHub Actions</p>
   </header>
 
   <div class="status-line" id="status">Loading history&hellip;</div>
@@ -268,14 +308,23 @@ async function load() {
         '<td class="num ' + (gained > 0 ? 'gain-pos' : '') + '">' + (gained > 0 ? fmtSigned(gained) : '&mdash;') + '</td>' +
         '</tr>';
     }).join('');
-    return '<div class="card"><h2>' + name + '</h2>' +
-      '<div class="totals">' +
-        '<div><span class="num">' + fmt(overall.level) + '</span><span class="label">Total level</span></div>' +
-        '<div><span class="num">' + fmt(overall.xp) + '</span><span class="label">Total XP</span></div>' +
-        '<div><span class="num">' + fmtSigned(weeklyGains[name]) + '</span><span class="label">XP this week</span></div>' +
+    return '<details class="card">' +
+      '<summary>' +
+        '<span class="player-name">' + name + '</span>' +
+        '<span class="summary-stat">' + fmt(overall.level) + '<span class="label">Total level</span></span>' +
+        '<span class="summary-stat">' + fmtSigned(weeklyGains[name]) + '<span class="label">XP this week</span></span>' +
+        '<span class="chevron">&#9656;</span>' +
+      '</summary>' +
+      '<div class="card-body">' +
+        '<div class="totals">' +
+          '<div><span class="num">' + fmt(overall.level) + '</span><span class="label">Total level</span></div>' +
+          '<div><span class="num">' + fmt(overall.xp) + '</span><span class="label">Total XP</span></div>' +
+          '<div><span class="num">' + fmtSigned(weeklyGains[name]) + '</span><span class="label">XP this week</span></div>' +
+        '</div>' +
+        '<table><thead><tr><th>Skill</th><th class="num">Level</th><th class="num">XP</th><th class="num">7-day gain</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody></table>' +
       '</div>' +
-      '<table><thead><tr><th>Skill</th><th class="num">Level</th><th class="num">XP</th><th class="num">7-day gain</th></tr></thead>' +
-      '<tbody>' + rows + '</tbody></table></div>';
+    '</details>';
   }).join('');
 }
 

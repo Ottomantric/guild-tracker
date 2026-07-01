@@ -61,6 +61,63 @@ set to every 6 hours (`0 */6 * * *`). GitHub Actions cron schedules can drift
 by a few minutes and are disabled automatically on repos with no activity for
 60 days — pushing any commit re-enables it.
 
+## Setting up the events calendar
+
+The stats dashboard is read-only, so it works fine off a plain JSON file. RSVPs
+need to be writable by anyone visiting the page, in real time — a static site
+can't do that alone, so the calendar uses Firebase Firestore, a free database
+you talk to directly from the page (no server of your own to run).
+
+1. Go to [console.firebase.google.com](https://console.firebase.google.com),
+   sign in with any Google account, and click "Create a project." Give it any
+   name — no credit card is required for what this uses.
+2. In the project, go to **Build -> Firestore Database -> Create database**.
+   Choose "Start in test mode" for now (we'll lock it down with the rules
+   below) and pick any region close to your group.
+3. Go to **Project settings** (gear icon) -> scroll to "Your apps" -> click
+   the `</>` (web) icon -> register an app (no need to check "also set up
+   Firebase Hosting"). It'll show you a `firebaseConfig` object like:
+
+   ```js
+   const firebaseConfig = {
+     apiKey: "AIza...",
+     authDomain: "your-project.firebaseapp.com",
+     projectId: "your-project",
+     storageBucket: "your-project.appspot.com",
+     messagingSenderId: "123456789",
+     appId: "1:123456789:web:abcdef"
+   };
+   ```
+
+4. Open `index.html` in this repo, find the `firebaseConfig` object near the
+   bottom (search for `PASTE_ME`), and replace it with your actual values.
+   Commit the change.
+5. Back in Firebase, go to **Firestore Database -> Rules** and replace the
+   default rules with:
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /events/{eventId} {
+         allow read, write: if true;
+       }
+     }
+   }
+   ```
+
+   This scopes open access to only the `events` collection (not your whole
+   Firebase project) but doesn't require login — anyone with your Pages URL
+   can add, RSVP to, or delete events. That's a reasonable trade-off for a
+   small private guild page; it wouldn't be appropriate for anything public
+   or sensitive.
+
+6. Refresh your GitHub Pages site. The "Calendar not connected yet" message
+   should disappear, and you should be able to add an event and RSVP.
+
+Each person types their RSN once into the "RSVPing as" field — it's
+remembered in their own browser for next time, and used to tag their RSVP.
+
 ## Notes
 
 - History is capped at 400 snapshots in `scripts/fetch-stats.js` (roughly

@@ -518,7 +518,7 @@
       <img src="guild-icon.png" alt="" class="brand-icon">
       <h1>Guild Tracker</h1>
     </div>
-    <p class="subtitle">Auto-updated every 2 hours via GitHub Actions</p>
+    <p class="subtitle">Auto-updated every 30 minutes</p>
   </header>
 
   <div class="auth-bar">
@@ -737,6 +737,31 @@ async function fetchSnapshot(timestamp) {
   return await res.json();
 }
 
+// Binary search manifest[fromIdx..toIdx] (inclusive, ascending order) for the
+// earliest snapshot that includes this player. Used as a personal baseline
+// for anyone missing from the shared 7-day-ago baseline (i.e. anyone who
+// started being tracked more recently than that).
+async function findEarliestSnapshotContaining(name, manifest, fromIdx, toIdx) {
+  let lo = fromIdx, hi = toIdx, foundIdx = null, foundSnapshot = null;
+  const cache = {};
+  async function getSnap(idx) {
+    if (!(idx in cache)) cache[idx] = await fetchSnapshot(manifest[idx]);
+    return cache[idx];
+  }
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const snap = await getSnap(mid);
+    if (snap.players && snap.players[name]) {
+      foundIdx = mid;
+      foundSnapshot = snap;
+      hi = mid - 1; // keep searching earlier in case there's an even older match
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return foundSnapshot ? { timestamp: manifest[foundIdx], snapshot: foundSnapshot } : null;
+}
+
 async function load() {
   const statusEl = document.getElementById('status');
   let manifest;
@@ -775,11 +800,45 @@ async function load() {
   statusEl.className = 'status-line';
 
   const names = Object.keys(latest.players);
+
+  // Anyone missing from the shared baseline joined the roster more recently
+  // than that snapshot. For them, fall back to their own earliest tracked
+  // snapshot instead of showing a flat (and misleading) 0. Once 7 real days
+  // have passed since that first snapshot, they'll naturally show up in the
+  // shared baseline on their own and this fallback stops applying to them.
+  const baselineIndex = Math.max(0, manifest.indexOf(baselineTimestamp));
+  const latestIndex = manifest.length - 1;
+  const missingNames = isPartialWeek ? [] : names.filter((name) => !baseline.players[name]);
+
+  const personalLookups = await Promise.all(
+    missingNames.map((name) => findEarliestSnapshotContaining(name, manifest, baselineIndex, latestIndex))
+  );
+
+  const effectiveBaselines = {};
+  const sinceJoining = {};
+  names.forEach((name) => {
+    effectiveBaselines[name] = baseline;
+    sinceJoining[name] = false;
+  });
+  missingNames.forEach((name, i) => {
+    const result = personalLookups[i];
+    if (result) {
+      effectiveBaselines[name] = result.snapshot;
+      const spanMs = new Date(latest.timestamp).getTime() - new Date(result.timestamp).getTime();
+      sinceJoining[name] = spanMs < 7 * 24 * 60 * 60 * 1000;
+    } else {
+      // Shouldn't normally happen (they exist in `latest`, so some snapshot
+      // must contain them) but fall back to "no gain yet" rather than crash.
+      effectiveBaselines[name] = latest;
+      sinceJoining[name] = true;
+    }
+  });
+
   const weeklyGains = {};
   let maxGain = 1;
   names.forEach((name) => {
     const cur = latest.players[name]?.Overall?.xp ?? 0;
-    const base = baseline.players[name]?.Overall?.xp ?? cur;
+    const base = effectiveBaselines[name].players[name]?.Overall?.xp ?? cur;
     const gain = Math.max(0, cur - base);
     weeklyGains[name] = gain;
     if (gain > maxGain) maxGain = gain;
@@ -792,7 +851,7 @@ async function load() {
     const pct = Math.round((gain / maxGain) * 100);
     const overall = latest.players[name].Overall;
     return '<tr><td>' + name + '</td>' +
-      '<td class="num"><div class="gain-cell"><span class="gain-bar-track"><span class="gain-bar-fill" style="width:' + pct + '%"></span></span>' + fmt(gain) + '</div></td>' +
+      '<td class="num"><div class="gain-cell"><span class="gain-bar-track"><span class="gain-bar-fill" style="width:' + pct + '%"></span></span>' + fmt(gain) + (sinceJoining[name] ? ' <span class="empty-note">(since joining)</span>' : '') + '</div></td>' +
       '<td class="num">' + fmt(overall.level) + '</td>' +
       '<td class="num">' + fmt(overall.xp) + '</td></tr>';
   }).join('');
@@ -809,7 +868,8 @@ async function load() {
   const rosterEl = document.getElementById('roster');
   rosterEl.innerHTML = names.map((name) => {
     const skills = latest.players[name];
-    const baseSkills = baseline.players[name] || {};
+    const baseSkills = effectiveBaselines[name].players[name] || {};
+    const weekLabel = sinceJoining[name] ? 'Since joining' : 'XP this week';
     const overall = skills.Overall;
     const rows = SKILL_ORDER.slice(1).filter((s) => skills[s]).map((s) => {
       const cur = skills[s];
@@ -828,16 +888,16 @@ async function load() {
       '<summary>' +
         '<span class="player-name">' + name + '</span>' +
         '<span class="summary-stat">' + fmt(overall.level) + '<span class="label">Total level</span></span>' +
-        '<span class="summary-stat">' + fmtSigned(weeklyGains[name]) + '<span class="label">XP this week</span></span>' +
+        '<span class="summary-stat">' + fmtSigned(weeklyGains[name]) + '<span class="label">' + weekLabel + '</span></span>' +
         '<span class="chevron">&#9656;</span>' +
       '</summary>' +
       '<div class="card-body">' +
         '<div class="totals">' +
           '<div><span class="num">' + fmt(overall.level) + '</span><span class="label">Total level</span></div>' +
           '<div><span class="num">' + fmt(overall.xp) + '</span><span class="label">Total XP</span></div>' +
-          '<div><span class="num">' + fmtSigned(weeklyGains[name]) + '</span><span class="label">XP this week</span></div>' +
+          '<div><span class="num">' + fmtSigned(weeklyGains[name]) + '</span><span class="label">' + weekLabel + '</span></div>' +
         '</div>' +
-        '<table><thead><tr><th>Skill</th><th class="num">Level</th><th class="num">XP</th><th class="num">7-day gain</th></tr></thead>' +
+        '<table><thead><tr><th>Skill</th><th class="num">Level</th><th class="num">XP</th><th class="num">' + (sinceJoining[name] ? 'Gain since joining' : '7-day gain') + '</th></tr></thead>' +
         '<tbody>' + rows + '</tbody></table>' +
       '</div>' +
     '</details>';

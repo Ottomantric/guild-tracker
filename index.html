@@ -489,6 +489,54 @@
   }
   .trade-badge.open { color: var(--green); border-color: var(--green); }
   .trade-badge.completed { color: var(--muted); border-color: var(--panel-border); }
+
+  .autocomplete-wrap { position: relative; }
+  .autocomplete-list {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    background: var(--panel);
+    border: 1px solid var(--gold);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .autocomplete-list.open { display: block; }
+  .autocomplete-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--parchment);
+  }
+  .autocomplete-item:hover, .autocomplete-item.active {
+    background: #2a2418;
+  }
+  .autocomplete-item img {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    flex: 0 0 auto;
+    background: var(--bg);
+    border-radius: 3px;
+  }
+  .autocomplete-item .no-icon {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+  }
+  .autocomplete-empty {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: 'Courier New', monospace;
+  }
   .comments-list { margin-top: 0.6rem; }
   .comment-item {
     padding: 0.5rem 0;
@@ -624,6 +672,7 @@
         each other's XP gains mostly so we have something to rib each other
         about.
       </p>
+      <p class="empty-note">(This is placeholder copy &mdash; edit the About section in index.html to make it sound like your actual guild.)</p>
     </div>
 
     <div class="leaderboard">
@@ -716,15 +765,21 @@
 
     <div class="events">
       <h2>New trade listing</h2>
-      <form class="event-form trade-form" id="trade-form">
-        <input type="text" class="title" id="trade-offer-name" placeholder="Item you have" required style="flex:1 1 180px">
+      <form class="event-form trade-form" id="trade-form" autocomplete="off">
+        <div class="autocomplete-wrap" style="flex:1 1 180px">
+          <input type="text" class="title" id="trade-offer-name" placeholder="Item you have" required style="width:100%">
+          <div class="autocomplete-list" id="trade-offer-suggestions"></div>
+        </div>
         <input type="number" id="trade-offer-qty" placeholder="Qty" min="1" value="1" style="flex:0 0 70px">
         <select id="trade-want-type">
           <option value="gp">Want: GP</option>
           <option value="item">Want: Item</option>
         </select>
         <input type="number" id="trade-want-gp" placeholder="GP amount" min="0" style="flex:1 1 140px">
-        <input type="text" id="trade-want-item" placeholder="Item you want" style="flex:1 1 180px; display:none">
+        <div class="autocomplete-wrap" style="flex:1 1 180px; display:none" id="trade-want-item-wrap">
+          <input type="text" id="trade-want-item" placeholder="Item you want" style="width:100%">
+          <div class="autocomplete-list" id="trade-want-suggestions"></div>
+        </div>
         <input type="text" class="notes" id="trade-notes" placeholder="Notes (optional, e.g. 'or best offer')">
         <button type="submit">List trade</button>
       </form>
@@ -774,7 +829,7 @@ const wantTypeSelect = document.getElementById('trade-want-type');
 wantTypeSelect.addEventListener('change', () => {
   const isGp = wantTypeSelect.value === 'gp';
   document.getElementById('trade-want-gp').style.display = isGp ? '' : 'none';
-  document.getElementById('trade-want-item').style.display = isGp ? 'none' : '';
+  document.getElementById('trade-want-item-wrap').style.display = isGp ? 'none' : '';
 });
 </script>
 
@@ -1582,6 +1637,93 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       }
     }
 
+    // Same search as above, but returns up to `limit` matches for the
+    // autocomplete dropdown instead of just the single best one.
+    async function searchItemSuggestions(query, limit) {
+      if (!query || query.trim().length < 2) return [];
+      try {
+        const url = 'https://runescape.wiki/api.php?action=query&generator=search&gsrsearch=' +
+          encodeURIComponent(query.trim()) + '&gsrlimit=' + limit + '&prop=pageimages&pithumbsize=60&format=json&origin=*';
+        const res = await fetch(url);
+        if (!res.ok) return [];
+        const data = await res.json();
+        const pages = data.query && data.query.pages;
+        if (!pages) return [];
+        return Object.values(pages)
+          .sort((a, b) => (a.index || 0) - (b.index || 0))
+          .map((p) => ({ name: p.title, imageUrl: (p.thumbnail && p.thumbnail.source) || null }));
+      } catch (err) {
+        console.error('item suggestion search failed:', err.message);
+        return [];
+      }
+    }
+
+    // Wires a text input to a live search-as-you-type dropdown. Debounced so
+    // it doesn't fire a request on every single keystroke, and guards against
+    // out-of-order responses (a slow early request landing after a newer one).
+    function attachItemAutocomplete(inputEl, listEl, onSelect) {
+      let debounceTimer = null;
+      let requestCounter = 0;
+
+      function closeList() {
+        listEl.classList.remove('open');
+        listEl.innerHTML = '';
+      }
+
+      inputEl.addEventListener('input', () => {
+        const query = inputEl.value;
+        clearTimeout(debounceTimer);
+        if (query.trim().length < 2) {
+          closeList();
+          return;
+        }
+        debounceTimer = setTimeout(async () => {
+          const thisRequest = ++requestCounter;
+          const results = await searchItemSuggestions(query, 8);
+          if (thisRequest !== requestCounter) return; // a newer keystroke superseded this
+          if (results.length === 0) {
+            listEl.innerHTML = '<div class="autocomplete-empty">No matches</div>';
+            listEl.classList.add('open');
+            return;
+          }
+          listEl.innerHTML = '';
+          results.forEach((r) => {
+            const item = document.createElement('div');
+            item.className = 'autocomplete-item';
+            item.innerHTML = (r.imageUrl ? '<img src="' + r.imageUrl + '" alt="">' : '<span class="no-icon"></span>') +
+              '<span>' + escapeHtml(r.name) + '</span>';
+            // mousedown (not click) fires before the input's blur event, so
+            // the selection registers before closeList() would otherwise run.
+            item.addEventListener('mousedown', (evt) => {
+              evt.preventDefault();
+              inputEl.value = r.name;
+              onSelect(r.name, r.imageUrl);
+              closeList();
+            });
+            listEl.appendChild(item);
+          });
+          listEl.classList.add('open');
+        }, 300);
+      });
+
+      inputEl.addEventListener('blur', () => {
+        setTimeout(closeList, 150);
+      });
+    }
+
+    let offerSelection = { name: null, imageUrl: null };
+    let wantSelection = { name: null, imageUrl: null };
+    attachItemAutocomplete(
+      document.getElementById('trade-offer-name'),
+      document.getElementById('trade-offer-suggestions'),
+      (name, imageUrl) => { offerSelection = { name, imageUrl }; }
+    );
+    attachItemAutocomplete(
+      document.getElementById('trade-want-item'),
+      document.getElementById('trade-want-suggestions'),
+      (name, imageUrl) => { wantSelection = { name, imageUrl }; }
+    );
+
     tradeForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       if (!currentMember) return;
@@ -1599,9 +1741,14 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Looking up images…';
       try {
+        // Reuse the image from a clicked autocomplete suggestion if the text
+        // still matches exactly what was selected; otherwise (typed by hand,
+        // or edited after selecting) fall back to a fresh lookup.
         const [offerImageUrl, wantImageUrl] = await Promise.all([
-          lookupItemImage(offerName),
-          wantType === 'item' ? lookupItemImage(wantItemName) : Promise.resolve(null)
+          offerSelection.name === offerName ? Promise.resolve(offerSelection.imageUrl) : lookupItemImage(offerName),
+          wantType === 'item'
+            ? (wantSelection.name === wantItemName ? Promise.resolve(wantSelection.imageUrl) : lookupItemImage(wantItemName))
+            : Promise.resolve(null)
         ]);
         await addDoc(tradeCol, {
           offerName, offerQty, offerImageUrl,
@@ -1616,6 +1763,8 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         });
         tradeForm.reset();
         document.getElementById('trade-offer-qty').value = 1;
+        offerSelection = { name: null, imageUrl: null };
+        wantSelection = { name: null, imageUrl: null };
         wantTypeSelect.dispatchEvent(new Event('change'));
       } catch (err) {
         alert('Could not list trade (are you an approved member?): ' + err.message);

@@ -264,6 +264,15 @@ you can disable or delete the account directly.
   name doesn't match a wiki page (or the lookup fails for any reason), the
   listing still posts fine, it just shows the item name without a picture —
   a missing image is never a blocking error.
+- Typing into either item field on a trade listing triggers a live
+  search-as-you-type dropdown against the wiki (debounced, so it doesn't
+  fire a request on every keystroke) rather than a locally stored list of
+  every item in the game — RS3 has thousands of items across many
+  categories with no single official endpoint that lists them all, so this
+  avoids needing to build and maintain that dataset separately. Picking a
+  suggestion locks in that exact image immediately; typing a name by hand
+  without picking a suggestion still works, it just does the lookup once at
+  submit time instead.
 - The "About the guild" text on the Home tab is placeholder copy — edit the
   `<div class="about-panel">` block in `index.html` to describe your actual
   guild.

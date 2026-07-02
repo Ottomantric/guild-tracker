@@ -5,6 +5,14 @@ the last 7 days. A GitHub Actions workflow fetches fresh data on a schedule and
 commits it to this repo; a static page (hosted for free on GitHub Pages) reads
 that data and renders the dashboard. No server to run, no proxy involved.
 
+> **Upgrading from an older version of this repo?** If you previously had a
+> single ever-growing `data/history.json`, you don't need to do anything by
+> hand — the first time the updated `scripts/fetch-stats.js` runs, it
+> automatically splits that file into individual snapshots under
+> `data/snapshots/`, builds `data/manifest.json` from it, and deletes the old
+> `history.json`. Just update the two files below and let the next scheduled
+> (or manually triggered) run handle the rest.
+
 ## Setup (about 10 minutes, one time)
 
 1. **Create a new GitHub repository** (public is simplest — this data isn't
@@ -14,7 +22,8 @@ that data and renders the dashboard. No server to run, no proxy involved.
    guild-tracker/
      index.html
      players.json
-     data/history.json
+     data/snapshots/       (auto-created and populated by the workflow)
+     data/manifest.json    (auto-created by the workflow)
      scripts/fetch-stats.js
      .github/workflows/update-stats.yml
    ```
@@ -33,7 +42,8 @@ that data and renders the dashboard. No server to run, no proxy involved.
    of waiting for the schedule.
    Go to the `Actions` tab -> "Update guild stats" (left sidebar) -> "Run
    workflow" button -> "Run workflow". After it finishes (a minute or so),
-   `data/history.json` will have one entry.
+   `data/snapshots/` will have one file in it and `data/manifest.json` will
+   list it.
 
 5. **Visit your Pages URL.** You'll see current stats immediately. Weekly XP
    gained will show `0` until there's at least one snapshot from roughly a
@@ -41,18 +51,37 @@ that data and renders the dashboard. No server to run, no proxy involved.
 
 ## Adding or removing players
 
-Edit `players.json` — it's just a plain list of RuneScape display names:
+There are now two sources for who gets tracked, merged together automatically
+by the fetch script:
 
-```json
-[
-  "Ottomantric",
-  "Ghrimhex1254",
-  "NewGuildMember"
-]
-```
+1. **`players.json`** — a manual list, for anyone you want tracked without
+   them needing a site account (e.g. yourself, before you'd built any of
+   this). Edit it directly:
 
-Commit the change (or edit it directly in the GitHub web UI), and the next
-scheduled run — or a manually triggered one — will pick it up.
+   ```json
+   [
+     "Ottomantric",
+     "Ghrimhex1254",
+     "NewGuildMember"
+   ]
+   ```
+
+2. **Approved site members** — automatic. When an admin approves someone's
+   account on the Admin tab, their RSN is added to a small public Firestore
+   document (`publicRoster/roster`) that the fetch script reads on every run
+   and merges with `players.json`. Declining, removing a member, or manually
+   moving someone back out of `approved` status removes their RSN from that
+   list the same way. No repo edits needed for this path at all — the next
+   scheduled run (within 2 hours) just starts including them.
+
+Duplicates between the two lists are harmless — they're merged into a single
+set before fetching.
+
+If you ever change Firebase projects, update `FIREBASE_PROJECT_ID` at the top
+of `scripts/fetch-stats.js` to match — it needs to know which project's
+`publicRoster` document to read. This is safe to have in plain sight in the
+repo; it's the same project ID that's already visible in `index.html`'s
+`firebaseConfig`, not a secret.
 
 ## Changing how often it updates
 
@@ -125,6 +154,24 @@ the page; no server of your own to run).
        }
 
        match /forumPosts/{postId} {
+         allow read: if true;
+         allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
+         allow update: if isApproved();
+         allow delete: if isAdmin() || (isApproved() && resource.data.authorUid == request.auth.uid);
+
+         match /comments/{commentId} {
+           allow read: if true;
+           allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
+           allow delete: if isAdmin() || (isApproved() && resource.data.authorUid == request.auth.uid);
+         }
+       }
+
+       match /publicRoster/{docId} {
+         allow read: if true;
+         allow write: if isAdmin();
+       }
+
+       match /tradePosts/{tradeId} {
          allow read: if true;
          allow create: if isApproved() && request.resource.data.authorUid == request.auth.uid;
          allow update: if isApproved();
@@ -210,6 +257,13 @@ you can disable or delete the account directly.
 - Liking and disliking are mutually exclusive per person per post — clicking
   the option you already picked removes your vote instead of adding a
   second one.
+- The **Trading** tab works the same way as the forum (public read, approved
+  members can list/reply/moderate), but each listing also looks up an item
+  thumbnail from the RuneScape Wiki's public API by name and stores the
+  result — so images don't need to be fetched again on every page view. If a
+  name doesn't match a wiki page (or the lookup fails for any reason), the
+  listing still posts fine, it just shows the item name without a picture —
+  a missing image is never a blocking error.
 - The "About the guild" text on the Home tab is placeholder copy — edit the
   `<div class="about-panel">` block in `index.html` to describe your actual
   guild.
@@ -217,12 +271,13 @@ you can disable or delete the account directly.
   RSVP or add events until an admin approves them on the Home tab (see
   "Setting up member accounts" above). Viewing stats and the calendar stays
   public either way — no login needed just to look.
-- Approving or declining a sign-up doesn't automatically touch
-  `players.json` — you still add their RSN there yourself if you want their
-  stats tracked.
-- History is capped at 400 snapshots in `scripts/fetch-stats.js` (roughly
-  100 days at a 4x/day cadence) to keep the file small. Raise `MAX_SNAPSHOTS`
-  if you want to keep more.
+- Approving someone on the Admin tab automatically adds their RSN to the
+  tracked roster (see "Adding or removing players" above) — no manual
+  `players.json` edit needed for members who signed up through the site.
+- Snapshots older than 30 days are deleted automatically — both the file in
+  `data/snapshots/` and its entry in `data/manifest.json` — on every
+  scheduled run. Change `RETENTION_DAYS` at the top of
+  `scripts/fetch-stats.js` if you want to keep more or less history.
 - If a player's name has unusual characters or spaces, the script URL-encodes
   it automatically — just type the name as it appears in-game.
 - If someone's profile is private or the name is misspelled, that player is

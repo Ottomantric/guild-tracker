@@ -1623,7 +1623,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       if (!name || !name.trim()) return null;
       try {
         const url = 'https://runescape.wiki/api.php?action=query&generator=search&gsrsearch=' +
-          encodeURIComponent(name.trim()) + '&gsrlimit=1&prop=pageimages&pithumbsize=150&format=json&origin=*';
+          encodeURIComponent(name.trim() + ' incategory:"Tradeable items"') + '&gsrlimit=1&prop=pageimages&pithumbsize=150&format=json&origin=*';
         const res = await fetch(url);
         if (!res.ok) return null;
         const data = await res.json();
@@ -1643,7 +1643,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       if (!query || query.trim().length < 2) return [];
       try {
         const url = 'https://runescape.wiki/api.php?action=query&generator=search&gsrsearch=' +
-          encodeURIComponent(query.trim()) + '&gsrlimit=' + limit + '&prop=pageimages&pithumbsize=60&format=json&origin=*';
+          encodeURIComponent(query.trim() + ' incategory:"Tradeable items"') + '&gsrlimit=' + limit + '&prop=pageimages&pithumbsize=60&format=json&origin=*';
         const res = await fetch(url);
         if (!res.ok) return [];
         const data = await res.json();

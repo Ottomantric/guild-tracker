@@ -605,11 +605,12 @@
     <div class="disclaimer">
       <strong>How this works.</strong> A GitHub Actions workflow fetches everyone's RS3
       hiscores directly from Jagex every 2 hours and appends a snapshot to
-      <code>data/history.json</code> in this repo. This page reads that file directly, so
-      there's no CORS proxy in the loop at all &mdash; that fragility from the earlier
-      prototype is gone. Weekly XP is the difference between the most recent snapshot and
-      the snapshot closest to 7 days before it, so figures firm up as more history
-      accumulates.
+      <code>data/snapshots/</code> in this repo, tracked by a small
+      <code>data/manifest.json</code> index. This page reads the manifest, then fetches only
+      the two snapshot files it actually needs (the latest one, and whichever is closest to
+      7 days ago) — no CORS proxy in the loop, and no ever-growing file to download either.
+      Snapshots older than 30 days are deleted automatically on each run. Weekly XP is the
+      difference between those two snapshots, so figures firm up as more history accumulates.
     </div>
 
   </section>
@@ -713,40 +714,61 @@ function fmtSigned(n) {
   return (n > 0 ? '+' : '') + n.toLocaleString();
 }
 
-function findBaselineSnapshot(history, latestTimestamp) {
+function filenameForTimestamp(ts) {
+  return ts.replace(/[:.]/g, '-') + '.json';
+}
+
+function findBaselineTimestamp(manifest, latestTimestamp) {
   const targetTime = new Date(latestTimestamp).getTime() - 7 * 24 * 60 * 60 * 1000;
-  let best = null;
-  for (const snap of history) {
-    const t = new Date(snap.timestamp).getTime();
-    if (t <= targetTime) {
-      if (!best || t > new Date(best.timestamp).getTime()) best = snap;
+  let best = manifest[0];
+  for (const ts of manifest) {
+    if (new Date(ts).getTime() <= targetTime) {
+      best = ts;
+    } else {
+      break; // manifest is sorted ascending, so nothing after this qualifies either
     }
   }
-  return best || history[0];
+  return best;
+}
+
+async function fetchSnapshot(timestamp) {
+  const res = await fetch('data/snapshots/' + filenameForTimestamp(timestamp) + '?_=' + Date.now());
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return await res.json();
 }
 
 async function load() {
   const statusEl = document.getElementById('status');
-  let history;
+  let manifest;
   try {
-    const res = await fetch('data/history.json?_=' + Date.now());
+    const res = await fetch('data/manifest.json?_=' + Date.now());
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    history = await res.json();
+    manifest = await res.json();
   } catch (e) {
-    statusEl.textContent = 'Could not load data/history.json (' + e.message + '). Has the "Update guild stats" workflow run yet?';
+    statusEl.textContent = 'Could not load data/manifest.json (' + e.message + '). Has the "Update guild stats" workflow run yet?';
     statusEl.className = 'status-line error';
     return;
   }
 
-  if (!history || history.length === 0) {
+  if (!manifest || manifest.length === 0) {
     statusEl.textContent = 'No snapshots yet. Trigger the "Update guild stats" workflow manually in the Actions tab to get started.';
     statusEl.className = 'status-line error';
     return;
   }
 
-  const latest = history[history.length - 1];
-  const baseline = findBaselineSnapshot(history, latest.timestamp);
-  const isPartialWeek = baseline === latest || history.length < 2;
+  const latestTimestamp = manifest[manifest.length - 1];
+  const baselineTimestamp = findBaselineTimestamp(manifest, latestTimestamp);
+  const isPartialWeek = baselineTimestamp === latestTimestamp || manifest.length < 2;
+
+  let latest, baseline;
+  try {
+    latest = await fetchSnapshot(latestTimestamp);
+    baseline = isPartialWeek ? latest : await fetchSnapshot(baselineTimestamp);
+  } catch (e) {
+    statusEl.textContent = 'Could not load snapshot data (' + e.message + ').';
+    statusEl.className = 'status-line error';
+    return;
+  }
 
   statusEl.textContent = 'Latest snapshot: ' + new Date(latest.timestamp).toLocaleString() +
     (isPartialWeek ? ' (less than a week of history so far — weekly figures will fill in over time)' : '');

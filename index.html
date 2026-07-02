@@ -436,6 +436,59 @@
   }
   textarea { width: 100%; min-height: 80px; resize: vertical; flex: 1 1 100%; }
   .forum-post .event-notes { color: var(--parchment); white-space: pre-wrap; }
+
+  .trade-form select { flex: 0 0 auto; }
+  .trade-sides {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 0.6rem 0;
+    flex-wrap: wrap;
+  }
+  .trade-side {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex: 1 1 200px;
+    min-width: 0;
+  }
+  .trade-side img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    flex: 0 0 auto;
+  }
+  .trade-side-text { min-width: 0; }
+  .trade-side-name {
+    color: var(--parchment);
+    font-size: 0.9rem;
+    overflow-wrap: break-word;
+  }
+  .trade-side-qty {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .trade-arrow {
+    color: var(--gold);
+    font-size: 1.1rem;
+    flex: 0 0 auto;
+  }
+  .trade-badge {
+    font-family: 'Courier New', monospace;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 3px;
+    border: 1px solid var(--panel-border);
+    color: var(--muted);
+  }
+  .trade-badge.open { color: var(--green); border-color: var(--green); }
+  .trade-badge.completed { color: var(--muted); border-color: var(--panel-border); }
   .comments-list { margin-top: 0.6rem; }
   .comment-item {
     padding: 0.5rem 0;
@@ -518,7 +571,7 @@
       <img src="guild-icon.png" alt="" class="brand-icon">
       <h1>Guild Tracker</h1>
     </div>
-    <p class="subtitle">Auto-updated every 30 minutes</p>
+    <p class="subtitle">Auto-updated every 2 hours via GitHub Actions</p>
   </header>
 
   <div class="auth-bar">
@@ -550,6 +603,7 @@
     <button class="tab-btn" data-tab="stats">Player stats</button>
     <button class="tab-btn" data-tab="calendar">Calendar</button>
     <button class="tab-btn" data-tab="forum">Forum</button>
+    <button class="tab-btn" data-tab="trading">Trading</button>
     <button class="tab-btn" data-tab="admin" id="admin-tab-btn" style="display:none">Admin</button>
   </nav>
 
@@ -659,6 +713,29 @@
 
   </section>
 
+  <section class="tab-panel" id="tab-trading">
+
+    <div class="events">
+      <h2>New trade listing</h2>
+      <form class="event-form trade-form" id="trade-form">
+        <input type="text" class="title" id="trade-offer-name" placeholder="Item you have" required style="flex:1 1 180px">
+        <input type="number" id="trade-offer-qty" placeholder="Qty" min="1" value="1" style="flex:0 0 70px">
+        <select id="trade-want-type">
+          <option value="gp">Want: GP</option>
+          <option value="item">Want: Item</option>
+        </select>
+        <input type="number" id="trade-want-gp" placeholder="GP amount" min="0" style="flex:1 1 140px">
+        <input type="text" id="trade-want-item" placeholder="Item you want" style="flex:1 1 180px; display:none">
+        <input type="text" class="notes" id="trade-notes" placeholder="Notes (optional, e.g. 'or best offer')">
+        <button type="submit">List trade</button>
+      </form>
+      <p class="empty-note" id="trading-status"></p>
+    </div>
+
+    <div id="trading-feed"></div>
+
+  </section>
+
   <section class="tab-panel" id="tab-admin">
 
     <div class="join-panel">
@@ -692,7 +769,14 @@ TAB_BUTTONS.forEach((btn) => {
   });
 });
 const initialTab = (location.hash || '').replace('#', '');
-if (['home', 'stats', 'calendar', 'admin', 'forum'].includes(initialTab)) activateTab(initialTab);
+if (['home', 'stats', 'calendar', 'admin', 'forum', 'trading'].includes(initialTab)) activateTab(initialTab);
+
+const wantTypeSelect = document.getElementById('trade-want-type');
+wantTypeSelect.addEventListener('change', () => {
+  const isGp = wantTypeSelect.value === 'gp';
+  document.getElementById('trade-want-gp').style.display = isGp ? '' : 'none';
+  document.getElementById('trade-want-item').style.display = isGp ? 'none' : '';
+});
 </script>
 
 <script>
@@ -943,6 +1027,9 @@ const joinListEl = document.getElementById('join-requests-list');
 const postForm = document.getElementById('post-form');
 const forumFeedEl = document.getElementById('forum-feed');
 const forumStatusEl = document.getElementById('forum-status');
+const tradingFeedEl = document.getElementById('trading-feed');
+const tradingStatusEl = document.getElementById('trading-status');
+const tradeForm = document.getElementById('trade-form');
 
 showLoginBtn.addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
 showSignupBtn.addEventListener('click', () => { loginForm.style.display = 'none'; signupForm.style.display = 'flex'; });
@@ -953,6 +1040,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
   authStatusEl.textContent = 'Accounts not connected yet — add your Firebase config in index.html (see README).';
   eventsStatusEl.textContent = 'Calendar not connected yet.';
   forumStatusEl.textContent = 'Forum not connected yet.';
+  tradingStatusEl.textContent = 'Trading not connected yet.';
   showLoginBtn.disabled = true;
   showSignupBtn.disabled = true;
 } else {
@@ -973,6 +1061,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const eventsCol = collection(db, 'events');
     const membersCol = collection(db, 'members');
     const forumCol = collection(db, 'forumPosts');
+    const tradeCol = collection(db, 'tradePosts');
     const rosterRef = doc(db, 'publicRoster', 'roster');
 
     async function addToRoster(rsn) {
@@ -1033,6 +1122,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     function setEventControlsEnabled(enabled) {
       eventForm.querySelectorAll('input, button').forEach((el) => { el.disabled = !enabled; });
       postForm.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = !enabled; });
+      tradeForm.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = !enabled; });
       document.querySelectorAll('.rsvp-btn').forEach((el) => { el.disabled = !enabled; });
     }
 
@@ -1060,6 +1150,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         setEventControlsEnabled(false);
         renderAll();
         renderForumFeed();
+        renderTradingFeed();
         return;
       }
 
@@ -1083,6 +1174,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         rsvpIdentityEl.textContent = 'Account has no membership record — contact an officer.';
         renderAll();
         renderForumFeed();
+        renderTradingFeed();
         return;
       }
 
@@ -1198,6 +1290,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
 
       renderAll();
       renderForumFeed();
+      renderTradingFeed();
     });
 
     eventForm.addEventListener('submit', async (e) => {
@@ -1467,6 +1560,217 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       forumStatusEl.textContent = '';
     }, (err) => {
       forumStatusEl.textContent = 'Could not load forum posts (' + err.message + ').';
+    });
+
+    // Looks up an item's thumbnail on the RuneScape Wiki by name. Returns
+    // null on any failure (not found, network error, etc.) rather than
+    // throwing — a missing image should never block posting a trade.
+    async function lookupItemImage(name) {
+      if (!name || !name.trim()) return null;
+      try {
+        const url = 'https://runescape.wiki/api.php?action=query&generator=search&gsrsearch=' +
+          encodeURIComponent(name.trim()) + '&gsrlimit=1&prop=pageimages&pithumbsize=150&format=json&origin=*';
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        const data = await res.json();
+        const pages = data.query && data.query.pages;
+        if (!pages) return null;
+        const page = Object.values(pages)[0];
+        return (page && page.thumbnail && page.thumbnail.source) || null;
+      } catch (err) {
+        console.error('item image lookup failed:', err.message);
+        return null;
+      }
+    }
+
+    tradeForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentMember) return;
+      const offerName = document.getElementById('trade-offer-name').value.trim();
+      const offerQty = parseInt(document.getElementById('trade-offer-qty').value, 10) || 1;
+      const wantType = document.getElementById('trade-want-type').value;
+      const wantGp = parseInt(document.getElementById('trade-want-gp').value, 10) || 0;
+      const wantItemName = document.getElementById('trade-want-item').value.trim();
+      const notes = document.getElementById('trade-notes').value.trim();
+      if (!offerName || (wantType === 'gp' && !wantGp) || (wantType === 'item' && !wantItemName)) {
+        alert('Fill in what you have and what you want before listing.');
+        return;
+      }
+      const submitBtn = tradeForm.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Looking up images…';
+      try {
+        const [offerImageUrl, wantImageUrl] = await Promise.all([
+          lookupItemImage(offerName),
+          wantType === 'item' ? lookupItemImage(wantItemName) : Promise.resolve(null)
+        ]);
+        await addDoc(tradeCol, {
+          offerName, offerQty, offerImageUrl,
+          wantType, wantGp: wantType === 'gp' ? wantGp : null,
+          wantItemName: wantType === 'item' ? wantItemName : null,
+          wantImageUrl,
+          notes,
+          status: 'open',
+          authorUid: currentMember.uid,
+          authorRsn: currentMember.rsn,
+          createdAt: serverTimestamp()
+        });
+        tradeForm.reset();
+        document.getElementById('trade-offer-qty').value = 1;
+        wantTypeSelect.dispatchEvent(new Event('change'));
+      } catch (err) {
+        alert('Could not list trade (are you an approved member?): ' + err.message);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'List trade';
+      }
+    });
+
+    function renderTradeSide(name, qty, imageUrl, fallbackLabel) {
+      const img = imageUrl ? '<img src="' + imageUrl + '" alt="">' : '';
+      const qtyHtml = qty && qty > 1 ? '<span class="trade-side-qty">x' + fmt(qty) + '</span>' : '';
+      return '<div class="trade-side">' + img +
+        '<div class="trade-side-text"><div class="trade-side-name">' + escapeHtml(name || fallbackLabel) + '</div>' + qtyHtml + '</div>' +
+        '</div>';
+    }
+
+    function renderTradePost(id, trade) {
+      const canModerate = currentMember && currentMember.status === 'approved' &&
+        (trade.authorUid === currentMember.uid || currentMember.role === 'admin');
+      const when = trade.createdAt ? trade.createdAt.toDate().toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+      const wantLabel = trade.wantType === 'gp' ? (fmt(trade.wantGp) + ' GP') : trade.wantItemName;
+
+      const div = document.createElement('div');
+      div.className = 'event-card forum-post';
+      div.innerHTML =
+        '<div class="event-head">' +
+          '<span class="event-title"><span class="trade-badge ' + trade.status + '">' + trade.status + '</span> ' + escapeHtml(trade.authorRsn) + '</span>' +
+          '<span class="event-time">' + when + '</span>' +
+        '</div>' +
+        '<div class="trade-sides">' +
+          renderTradeSide(trade.offerName, trade.offerQty, trade.offerImageUrl, 'Item') +
+          '<span class="trade-arrow">&#8594;</span>' +
+          renderTradeSide(wantLabel, null, trade.wantImageUrl, 'Item') +
+        '</div>' +
+        (trade.notes ? '<p class="event-notes">' + escapeHtml(trade.notes) + '</p>' : '') +
+        '<div class="rsvp-row">' +
+          (canModerate ? '<button type="button" class="rsvp-btn toggle-trade-status">' + (trade.status === 'open' ? 'Mark completed' : 'Reopen') + '</button>' : '') +
+          (canModerate ? '<button type="button" class="delete-event delete-trade" style="margin-left:auto">delete</button>' : '') +
+        '</div>' +
+        '<details class="past-events post-comments">' +
+          '<summary>Replies &#9656;</summary>' +
+          '<div class="comments-list"><p class="empty-note">Loading&hellip;</p></div>' +
+          '<form class="event-form reply-form" style="margin-top:0.6rem">' +
+            '<input type="text" class="reply-input" placeholder="Ask a question or make an offer&hellip;" style="flex:1"' + (currentMember && currentMember.status === 'approved' ? '' : ' disabled') + '>' +
+            '<button type="submit"' + (currentMember && currentMember.status === 'approved' ? '' : ' disabled') + '>Reply</button>' +
+          '</form>' +
+        '</details>';
+
+      const toggleBtn = div.querySelector('.toggle-trade-status');
+      if (toggleBtn) {
+        toggleBtn.addEventListener('click', async () => {
+          try {
+            await updateDoc(doc(db, 'tradePosts', id), { status: trade.status === 'open' ? 'completed' : 'open' });
+          } catch (err) {
+            alert('Could not update trade: ' + err.message);
+          }
+        });
+      }
+      const deleteBtn = div.querySelector('.delete-trade');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+          if (confirm('Delete this trade listing?')) {
+            try { await deleteDoc(doc(db, 'tradePosts', id)); }
+            catch (err) { alert('Could not delete: ' + err.message); }
+          }
+        });
+      }
+
+      // Comment thread — identical pattern to forum post replies.
+      let commentsUnsub = null;
+      const detailsEl = div.querySelector('.post-comments');
+      const commentsListEl = div.querySelector('.comments-list');
+      detailsEl.addEventListener('toggle', () => {
+        if (detailsEl.open && !commentsUnsub) {
+          commentsUnsub = onSnapshot(
+            query(collection(db, 'tradePosts', id, 'comments'), orderBy('createdAt', 'asc')),
+            (csnap) => {
+              if (csnap.empty) {
+                commentsListEl.innerHTML = '<p class="empty-note">No replies yet.</p>';
+                return;
+              }
+              commentsListEl.innerHTML = '';
+              csnap.forEach((cd) => {
+                const c = cd.data();
+                const cwhen = c.createdAt ? c.createdAt.toDate().toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+                const canDeleteComment = currentMember && currentMember.status === 'approved' &&
+                  (c.authorUid === currentMember.uid || currentMember.role === 'admin');
+                const item = document.createElement('div');
+                item.className = 'comment-item';
+                item.innerHTML =
+                  '<div class="comment-meta">' + escapeHtml(c.authorRsn) + ' &middot; ' + cwhen +
+                  (canDeleteComment ? ' &middot; <button type="button" class="delete-event delete-comment">delete</button>' : '') +
+                  '</div>' +
+                  '<div>' + escapeHtml(c.body).replace(/\n/g, '<br>') + '</div>';
+                const delCommentBtn = item.querySelector('.delete-comment');
+                if (delCommentBtn) {
+                  delCommentBtn.addEventListener('click', async () => {
+                    if (confirm('Delete this reply?')) {
+                      try { await deleteDoc(doc(db, 'tradePosts', id, 'comments', cd.id)); }
+                      catch (err) { alert('Could not delete: ' + err.message); }
+                    }
+                  });
+                }
+                commentsListEl.appendChild(item);
+              });
+            },
+            (err) => {
+              commentsListEl.innerHTML = '<p class="empty-note">Could not load replies (' + escapeHtml(err.message) + ').</p>';
+            }
+          );
+        } else if (!detailsEl.open && commentsUnsub) {
+          commentsUnsub();
+          commentsUnsub = null;
+        }
+      });
+
+      const replyForm = div.querySelector('.reply-form');
+      replyForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!currentMember || currentMember.status !== 'approved') return;
+        const input = replyForm.querySelector('.reply-input');
+        const body = input.value.trim();
+        if (!body) return;
+        try {
+          await addDoc(collection(db, 'tradePosts', id, 'comments'), {
+            body, authorUid: currentMember.uid, authorRsn: currentMember.rsn, createdAt: serverTimestamp()
+          });
+          input.value = '';
+        } catch (err) {
+          alert('Could not reply: ' + err.message);
+        }
+      });
+
+      return div;
+    }
+
+    let latestTrades = [];
+    function renderTradingFeed() {
+      tradingFeedEl.innerHTML = '';
+      if (latestTrades.length === 0) {
+        tradingFeedEl.innerHTML = '<p class="empty-note">No trades listed yet.</p>';
+        return;
+      }
+      latestTrades.forEach(([id, trade]) => tradingFeedEl.appendChild(renderTradePost(id, trade)));
+    }
+
+    onSnapshot(query(tradeCol, orderBy('createdAt', 'desc')), (snap) => {
+      latestTrades = [];
+      snap.forEach((d) => latestTrades.push([d.id, d.data()]));
+      renderTradingFeed();
+      tradingStatusEl.textContent = '';
+    }, (err) => {
+      tradingStatusEl.textContent = 'Could not load trade listings (' + err.message + ').';
     });
   } catch (err) {
     authStatusEl.textContent = 'Could not connect (' + err.message + ').';

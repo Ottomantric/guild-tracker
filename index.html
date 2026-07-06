@@ -537,6 +537,41 @@
     color: var(--muted);
     font-family: 'Courier New', monospace;
   }
+
+  .map-frame-wrap {
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 1.25rem;
+  }
+  .map-frame-wrap iframe {
+    width: 100%;
+    height: 520px;
+    border: none;
+    display: block;
+  }
+  .pin-form input[type=number] { flex: 0 0 90px; }
+  .pin-form select { flex: 0 0 auto; }
+  .pin-form input.notes { flex: 1 1 220px; }
+  .pin-item {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    border: 1px solid var(--panel-border);
+    border-radius: 6px;
+    padding: 0.7rem 0.9rem;
+    margin-bottom: 0.6rem;
+  }
+  .pin-item:last-child { margin-bottom: 0; }
+  .pin-item-text { flex: 1 1 auto; min-width: 0; }
+  .pin-item-label { color: var(--parchment); font-size: 0.9rem; }
+  .pin-item-meta {
+    font-family: 'Courier New', monospace;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+  .pin-item-actions { display: flex; gap: 0.4rem; flex: 0 0 auto; }
+  .pin-item-actions button { font-size: 0.72rem; padding: 0.32rem 0.6rem; }
   .comments-list { margin-top: 0.6rem; }
   .comment-item {
     padding: 0.5rem 0;
@@ -652,6 +687,7 @@
     <button class="tab-btn" data-tab="calendar">Calendar</button>
     <button class="tab-btn" data-tab="forum">Forum</button>
     <button class="tab-btn" data-tab="trading">Trading</button>
+    <button class="tab-btn" data-tab="map">Map</button>
     <button class="tab-btn" data-tab="admin" id="admin-tab-btn" style="display:none">Admin</button>
   </nav>
 
@@ -790,6 +826,34 @@
 
   </section>
 
+  <section class="tab-panel" id="tab-map">
+
+    <div class="map-frame-wrap">
+      <iframe id="rs-map-iframe" src="https://mejrs.github.io/rs3?m=0&z=2&p=0&x=3222&y=3218" title="RuneScape 3 world map" loading="lazy"></iframe>
+    </div>
+
+    <div class="events">
+      <h2>Save a pin</h2>
+      <p class="empty-note">Find a spot on the map above (it shows coordinates as you move around), then drop a pin here with those numbers.</p>
+      <form class="event-form pin-form" id="pin-form">
+        <input type="number" id="pin-x" placeholder="X" required>
+        <input type="number" id="pin-y" placeholder="Y" required>
+        <select id="pin-plane">
+          <option value="0">Ground floor</option>
+          <option value="1">1st floor</option>
+          <option value="2">2nd floor</option>
+          <option value="3">3rd floor</option>
+        </select>
+        <input type="text" class="notes" id="pin-label" placeholder="What's here? e.g. 'Good yew trees'" required>
+        <button type="submit">Save pin</button>
+      </form>
+      <p class="empty-note" id="map-status"></p>
+    </div>
+
+    <div id="pin-list"></div>
+
+  </section>
+
   <section class="tab-panel" id="tab-admin">
 
     <div class="join-panel">
@@ -823,7 +887,7 @@ TAB_BUTTONS.forEach((btn) => {
   });
 });
 const initialTab = (location.hash || '').replace('#', '');
-if (['home', 'stats', 'calendar', 'admin', 'forum', 'trading'].includes(initialTab)) activateTab(initialTab);
+if (['home', 'stats', 'calendar', 'admin', 'forum', 'trading', 'map'].includes(initialTab)) activateTab(initialTab);
 
 const wantTypeSelect = document.getElementById('trade-want-type');
 wantTypeSelect.addEventListener('change', () => {
@@ -1084,6 +1148,9 @@ const forumStatusEl = document.getElementById('forum-status');
 const tradingFeedEl = document.getElementById('trading-feed');
 const tradingStatusEl = document.getElementById('trading-status');
 const tradeForm = document.getElementById('trade-form');
+const pinForm = document.getElementById('pin-form');
+const pinListEl = document.getElementById('pin-list');
+const mapStatusEl = document.getElementById('map-status');
 
 showLoginBtn.addEventListener('click', () => { signupForm.style.display = 'none'; loginForm.style.display = 'flex'; });
 showSignupBtn.addEventListener('click', () => { loginForm.style.display = 'none'; signupForm.style.display = 'flex'; });
@@ -1095,6 +1162,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
   eventsStatusEl.textContent = 'Calendar not connected yet.';
   forumStatusEl.textContent = 'Forum not connected yet.';
   tradingStatusEl.textContent = 'Trading not connected yet.';
+  mapStatusEl.textContent = 'Map pins not connected yet.';
   showLoginBtn.disabled = true;
   showSignupBtn.disabled = true;
 } else {
@@ -1116,6 +1184,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
     const membersCol = collection(db, 'members');
     const forumCol = collection(db, 'forumPosts');
     const tradeCol = collection(db, 'tradePosts');
+    const mapPinsCol = collection(db, 'mapPins');
     const rosterRef = doc(db, 'publicRoster', 'roster');
 
     async function addToRoster(rsn) {
@@ -1177,6 +1246,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       eventForm.querySelectorAll('input, button').forEach((el) => { el.disabled = !enabled; });
       postForm.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = !enabled; });
       tradeForm.querySelectorAll('input, select, textarea, button').forEach((el) => { el.disabled = !enabled; });
+      pinForm.querySelectorAll('input, select, button').forEach((el) => { el.disabled = !enabled; });
       document.querySelectorAll('.rsvp-btn').forEach((el) => { el.disabled = !enabled; });
     }
 
@@ -1205,6 +1275,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         renderAll();
         renderForumFeed();
         renderTradingFeed();
+        renderPinList();
         return;
       }
 
@@ -1229,6 +1300,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
         renderAll();
         renderForumFeed();
         renderTradingFeed();
+        renderPinList();
         return;
       }
 
@@ -1345,6 +1417,7 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       renderAll();
       renderForumFeed();
       renderTradingFeed();
+      renderPinList();
     });
 
     eventForm.addEventListener('submit', async (e) => {
@@ -1919,6 +1992,81 @@ if (firebaseConfig.apiKey === 'PASTE_ME') {
       tradingStatusEl.textContent = '';
     }, (err) => {
       tradingStatusEl.textContent = 'Could not load trade listings (' + err.message + ').';
+    });
+
+    const mapIframe = document.getElementById('rs-map-iframe');
+    function goToPin(x, y, plane) {
+      mapIframe.src = 'https://mejrs.github.io/rs3?m=0&z=3&p=' + plane + '&x=' + x + '&y=' + y;
+      mapIframe.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    pinForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentMember) return;
+      const x = parseInt(document.getElementById('pin-x').value, 10);
+      const y = parseInt(document.getElementById('pin-y').value, 10);
+      const plane = parseInt(document.getElementById('pin-plane').value, 10);
+      const label = document.getElementById('pin-label').value.trim();
+      if (isNaN(x) || isNaN(y) || !label) return;
+      try {
+        await addDoc(mapPinsCol, {
+          x, y, plane, label,
+          authorUid: currentMember.uid,
+          authorRsn: currentMember.rsn,
+          createdAt: serverTimestamp()
+        });
+        pinForm.reset();
+      } catch (err) {
+        alert('Could not save pin (are you an approved member?): ' + err.message);
+      }
+    });
+
+    const PLANE_LABELS = ['Ground floor', '1st floor', '2nd floor', '3rd floor'];
+
+    function renderPinItem(id, pin) {
+      const canModerate = currentMember && currentMember.status === 'approved' &&
+        (pin.authorUid === currentMember.uid || currentMember.role === 'admin');
+      const div = document.createElement('div');
+      div.className = 'pin-item';
+      div.innerHTML =
+        '<div class="pin-item-text">' +
+          '<div class="pin-item-label">' + escapeHtml(pin.label) + '</div>' +
+          '<div class="pin-item-meta">' + pin.x + ', ' + pin.y + ' &middot; ' + (PLANE_LABELS[pin.plane] || 'Ground floor') + ' &middot; ' + escapeHtml(pin.authorRsn) + '</div>' +
+        '</div>' +
+        '<div class="pin-item-actions">' +
+          '<button type="button" class="go-to-pin">Go to</button>' +
+          (canModerate ? '<button type="button" class="delete-event delete-pin">delete</button>' : '') +
+        '</div>';
+      div.querySelector('.go-to-pin').addEventListener('click', () => goToPin(pin.x, pin.y, pin.plane));
+      const deleteBtn = div.querySelector('.delete-pin');
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async () => {
+          if (confirm('Delete the pin "' + pin.label + '"?')) {
+            try { await deleteDoc(doc(db, 'mapPins', id)); }
+            catch (err) { alert('Could not delete pin: ' + err.message); }
+          }
+        });
+      }
+      return div;
+    }
+
+    let latestPins = [];
+    function renderPinList() {
+      pinListEl.innerHTML = '';
+      if (latestPins.length === 0) {
+        pinListEl.innerHTML = '<p class="empty-note">No pins saved yet.</p>';
+        return;
+      }
+      latestPins.forEach(([id, pin]) => pinListEl.appendChild(renderPinItem(id, pin)));
+    }
+
+    onSnapshot(query(mapPinsCol, orderBy('createdAt', 'desc')), (snap) => {
+      latestPins = [];
+      snap.forEach((d) => latestPins.push([d.id, d.data()]));
+      renderPinList();
+      mapStatusEl.textContent = '';
+    }, (err) => {
+      mapStatusEl.textContent = 'Could not load map pins (' + err.message + ').';
     });
   } catch (err) {
     authStatusEl.textContent = 'Could not connect (' + err.message + ').';

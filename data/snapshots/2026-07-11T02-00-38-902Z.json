@@ -1,0 +1,613 @@
+{
+  "timestamp": "2026-07-11T02:00:38.902Z",
+  "players": {
+    "Ottomantric": {
+      "Overall": {
+        "rank": 817971,
+        "level": 764,
+        "xp": 828001
+      },
+      "Attack": {
+        "rank": 911833,
+        "level": 43,
+        "xp": 53527
+      },
+      "Defence": {
+        "rank": 951499,
+        "level": 40,
+        "xp": 40984
+      },
+      "Strength": {
+        "rank": 928683,
+        "level": 43,
+        "xp": 53477
+      },
+      "Constitution": {
+        "rank": 1007342,
+        "level": 42,
+        "xp": 46263
+      },
+      "Ranged": {
+        "rank": -1,
+        "level": 10,
+        "xp": 1288
+      },
+      "Prayer": {
+        "rank": 929506,
+        "level": 28,
+        "xp": 11267
+      },
+      "Magic": {
+        "rank": -1,
+        "level": 10,
+        "xp": 1216
+      },
+      "Cooking": {
+        "rank": 890167,
+        "level": 40,
+        "xp": 39683
+      },
+      "Woodcutting": {
+        "rank": 857166,
+        "level": 48,
+        "xp": 83724
+      },
+      "Fletching": {
+        "rank": 776060,
+        "level": 30,
+        "xp": 13662
+      },
+      "Fishing": {
+        "rank": 891572,
+        "level": 38,
+        "xp": 32717
+      },
+      "Firemaking": {
+        "rank": 957790,
+        "level": 32,
+        "xp": 17504
+      },
+      "Crafting": {
+        "rank": 904126,
+        "level": 31,
+        "xp": 15924
+      },
+      "Smithing": {
+        "rank": 836022,
+        "level": 42,
+        "xp": 48435
+      },
+      "Mining": {
+        "rank": 734224,
+        "level": 54,
+        "xp": 163984
+      },
+      "Herblore": {
+        "rank": -1,
+        "level": 5,
+        "xp": 413
+      },
+      "Agility": {
+        "rank": 608409,
+        "level": 42,
+        "xp": 46135
+      },
+      "Thieving": {
+        "rank": 713235,
+        "level": 27,
+        "xp": 10798
+      },
+      "Slayer": {
+        "rank": -1,
+        "level": 11,
+        "xp": 1388
+      },
+      "Farming": {
+        "rank": 478255,
+        "level": 44,
+        "xp": 58363
+      },
+      "Runecrafting": {
+        "rank": -1,
+        "level": 7,
+        "xp": 686
+      },
+      "Hunter": {
+        "rank": 535449,
+        "level": 41,
+        "xp": 44152
+      },
+      "Construction": {
+        "rank": 571186,
+        "level": 41,
+        "xp": 41233
+      },
+      "Summoning": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Dungeoneering": {
+        "rank": -1,
+        "level": 10,
+        "xp": 1178
+      },
+      "Divination": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Invention": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Archaeology": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Necromancy": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      }
+    },
+    "Leihrio": {
+      "Overall": {
+        "rank": 703491,
+        "level": 992,
+        "xp": 2547904
+      },
+      "Attack": {
+        "rank": 1074967,
+        "level": 33,
+        "xp": 18680
+      },
+      "Defence": {
+        "rank": 696341,
+        "level": 60,
+        "xp": 274022
+      },
+      "Strength": {
+        "rank": 977406,
+        "level": 40,
+        "xp": 37421
+      },
+      "Constitution": {
+        "rank": 778028,
+        "level": 57,
+        "xp": 212076
+      },
+      "Ranged": {
+        "rank": 727783,
+        "level": 46,
+        "xp": 73421
+      },
+      "Prayer": {
+        "rank": 807374,
+        "level": 37,
+        "xp": 29164
+      },
+      "Magic": {
+        "rank": 752549,
+        "level": 50,
+        "xp": 109606
+      },
+      "Cooking": {
+        "rank": 1133979,
+        "level": 20,
+        "xp": 4841
+      },
+      "Woodcutting": {
+        "rank": 875046,
+        "level": 46,
+        "xp": 72344
+      },
+      "Fletching": {
+        "rank": 708235,
+        "level": 40,
+        "xp": 38269
+      },
+      "Fishing": {
+        "rank": -1,
+        "level": 6,
+        "xp": 555
+      },
+      "Firemaking": {
+        "rank": 1092170,
+        "level": 22,
+        "xp": 5670
+      },
+      "Crafting": {
+        "rank": 610404,
+        "level": 55,
+        "xp": 174829
+      },
+      "Smithing": {
+        "rank": 578617,
+        "level": 60,
+        "xp": 286285
+      },
+      "Mining": {
+        "rank": 568784,
+        "level": 64,
+        "xp": 446260
+      },
+      "Herblore": {
+        "rank": -1,
+        "level": 14,
+        "xp": 2245
+      },
+      "Agility": {
+        "rank": 764012,
+        "level": 25,
+        "xp": 7990
+      },
+      "Thieving": {
+        "rank": 640481,
+        "level": 36,
+        "xp": 25148
+      },
+      "Slayer": {
+        "rank": 651200,
+        "level": 34,
+        "xp": 20258
+      },
+      "Farming": {
+        "rank": 505343,
+        "level": 39,
+        "xp": 37126
+      },
+      "Runecrafting": {
+        "rank": 627230,
+        "level": 40,
+        "xp": 40676
+      },
+      "Hunter": {
+        "rank": -1,
+        "level": 2,
+        "xp": 145
+      },
+      "Construction": {
+        "rank": 572227,
+        "level": 40,
+        "xp": 40370
+      },
+      "Summoning": {
+        "rank": 553634,
+        "level": 27,
+        "xp": 10444
+      },
+      "Dungeoneering": {
+        "rank": 683193,
+        "level": 28,
+        "xp": 11105
+      },
+      "Divination": {
+        "rank": -1,
+        "level": 2,
+        "xp": 163
+      },
+      "Invention": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Archaeology": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Necromancy": {
+        "rank": 225324,
+        "level": 67,
+        "xp": 568791
+      }
+    },
+    "Qwacker22": {
+      "Overall": {
+        "rank": 679703,
+        "level": 1046,
+        "xp": 4886012
+      },
+      "Attack": {
+        "rank": 639042,
+        "level": 62,
+        "xp": 365177
+      },
+      "Defence": {
+        "rank": 636683,
+        "level": 62,
+        "xp": 364409
+      },
+      "Strength": {
+        "rank": 675247,
+        "level": 62,
+        "xp": 353002
+      },
+      "Constitution": {
+        "rank": 709247,
+        "level": 62,
+        "xp": 344318
+      },
+      "Ranged": {
+        "rank": 931683,
+        "level": 28,
+        "xp": 10860
+      },
+      "Prayer": {
+        "rank": 937034,
+        "level": 27,
+        "xp": 10642
+      },
+      "Magic": {
+        "rank": 826893,
+        "level": 44,
+        "xp": 58715
+      },
+      "Cooking": {
+        "rank": 818867,
+        "level": 45,
+        "xp": 65561
+      },
+      "Woodcutting": {
+        "rank": 556846,
+        "level": 70,
+        "xp": 803158
+      },
+      "Fletching": {
+        "rank": 658449,
+        "level": 47,
+        "xp": 81800
+      },
+      "Fishing": {
+        "rank": 771749,
+        "level": 49,
+        "xp": 91825
+      },
+      "Firemaking": {
+        "rank": 495965,
+        "level": 68,
+        "xp": 605534
+      },
+      "Crafting": {
+        "rank": 808392,
+        "level": 40,
+        "xp": 39516
+      },
+      "Smithing": {
+        "rank": 498038,
+        "level": 68,
+        "xp": 630129
+      },
+      "Mining": {
+        "rank": 470362,
+        "level": 71,
+        "xp": 860182
+      },
+      "Herblore": {
+        "rank": -1,
+        "level": 1,
+        "xp": 30
+      },
+      "Agility": {
+        "rank": 780617,
+        "level": 22,
+        "xp": 6227
+      },
+      "Thieving": {
+        "rank": 737118,
+        "level": 25,
+        "xp": 8061
+      },
+      "Slayer": {
+        "rank": 617832,
+        "level": 38,
+        "xp": 33076
+      },
+      "Farming": {
+        "rank": -1,
+        "level": 1,
+        "xp": 74
+      },
+      "Runecrafting": {
+        "rank": 817415,
+        "level": 21,
+        "xp": 5271
+      },
+      "Hunter": {
+        "rank": -1,
+        "level": 3,
+        "xp": 250
+      },
+      "Construction": {
+        "rank": -1,
+        "level": 10,
+        "xp": 1299
+      },
+      "Summoning": {
+        "rank": -1,
+        "level": 1,
+        "xp": 51
+      },
+      "Dungeoneering": {
+        "rank": 525861,
+        "level": 47,
+        "xp": 78260
+      },
+      "Divination": {
+        "rank": 453968,
+        "level": 45,
+        "xp": 61957
+      },
+      "Invention": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Archaeology": {
+        "rank": 405126,
+        "level": 23,
+        "xp": 6378
+      },
+      "Necromancy": {
+        "rank": -1,
+        "level": 3,
+        "xp": 250
+      }
+    },
+    "Baz Queefe": {
+      "Overall": {
+        "rank": 1065178,
+        "level": 424,
+        "xp": 328453
+      },
+      "Attack": {
+        "rank": 949407,
+        "level": 41,
+        "xp": 42195
+      },
+      "Defence": {
+        "rank": 965711,
+        "level": 40,
+        "xp": 38531
+      },
+      "Strength": {
+        "rank": 977446,
+        "level": 40,
+        "xp": 37418
+      },
+      "Constitution": {
+        "rank": 1034514,
+        "level": 40,
+        "xp": 38915
+      },
+      "Ranged": {
+        "rank": -1,
+        "level": 10,
+        "xp": 1283
+      },
+      "Prayer": {
+        "rank": 1160157,
+        "level": 15,
+        "xp": 2709
+      },
+      "Magic": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Cooking": {
+        "rank": 961275,
+        "level": 34,
+        "xp": 21558
+      },
+      "Woodcutting": {
+        "rank": 1158546,
+        "level": 25,
+        "xp": 8430
+      },
+      "Fletching": {
+        "rank": 853078,
+        "level": 18,
+        "xp": 3763
+      },
+      "Fishing": {
+        "rank": 936843,
+        "level": 33,
+        "xp": 19666
+      },
+      "Firemaking": {
+        "rank": -1,
+        "level": 12,
+        "xp": 1600
+      },
+      "Crafting": {
+        "rank": -1,
+        "level": 10,
+        "xp": 1282
+      },
+      "Smithing": {
+        "rank": 855822,
+        "level": 41,
+        "xp": 43192
+      },
+      "Mining": {
+        "rank": 874173,
+        "level": 45,
+        "xp": 67320
+      },
+      "Herblore": {
+        "rank": -1,
+        "level": 5,
+        "xp": 388
+      },
+      "Agility": {
+        "rank": -1,
+        "level": 1,
+        "xp": 16
+      },
+      "Thieving": {
+        "rank": -1,
+        "level": 2,
+        "xp": 156
+      },
+      "Slayer": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Farming": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Runecrafting": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Hunter": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Construction": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Summoning": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Dungeoneering": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Divination": {
+        "rank": -1,
+        "level": 1,
+        "xp": 31
+      },
+      "Invention": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Archaeology": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      },
+      "Necromancy": {
+        "rank": -1,
+        "level": 1,
+        "xp": 0
+      }
+    }
+  }
+}
